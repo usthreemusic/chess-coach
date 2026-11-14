@@ -128,3 +128,12 @@ td a { color: var(--accent); }
 #moves button:hover { background: var(--bg); }
 #moves button.active { background: var(--accent); color: var(--surface); }
 .neighbours { display: flex; justify-content: space-between; margin-top: 12px; }
+
+/* Train page */
+.train-col { --size: min(calc(100vw - 32px), 560px); width: var(--size); }
+#prompt { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
+#result { min-height: 48px; margin-bottom: 4px; }
+#result p { margin: 0 0 4px; }
+#result .solved { color: var(--win); font-weight: 600; }
+#result .failed { color: var(--loss); font-weight: 600; }
+.train-done { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 16px; }

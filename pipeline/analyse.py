@@ -112,17 +112,25 @@ def analyse_game(game, engine, config):
     return out
 
 
-def _init(config):
-    global _engine, _config
-    _config = config
-    path = shutil.which(config["stockfish_path"]) or "/usr/games/stockfish"
+def _start_engine():
+    global _engine
+    path = shutil.which(_config["stockfish_path"]) or "/usr/games/stockfish"
     _engine = chess.engine.SimpleEngine.popen_uci(path)
     _engine.configure({"Threads": 1, "Hash": 64})
+
+
+def _init(config):
+    global _config
+    _config = config
+    _start_engine()
 
 
 def _work(game):
     try:
         result = analyse_game(game, _engine, _config)
+    except chess.engine.EngineTerminatedError as err:
+        _start_engine()  # a dead engine must not fail every later game on this worker
+        return game["id"], f"engine died: {err}"
     except Exception as err:  # one bad PGN must not stop the batch
         return game["id"], f"{type(err).__name__}: {err}"
     path = ANALYSIS / f"{game['id']}.json"

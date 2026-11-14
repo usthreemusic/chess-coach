@@ -46,6 +46,7 @@ def test_normalise_as_black_loss_and_draw():
 def test_variants_and_missing_pgn_skipped():
     assert fetch.normalise(game(rules="chess960"), "robbosloth") is None
     assert fetch.normalise(game(pgn=None), "robbosloth") is None
+    assert fetch.normalise(game(pgn='[SetUp "1"]\n' + PGN), "robbosloth") is None
 
 
 def test_needs_fetch(tmp_path, monkeypatch):
@@ -56,3 +57,13 @@ def test_needs_fetch(tmp_path, monkeypatch):
     assert fetch.needs_fetch("2024-02", "2024-05")  # cached mid-month
     assert fetch.needs_fetch("2024-03", "2024-05")  # never cached
     assert fetch.needs_fetch("2024-05", "2024-05")  # current month
+
+
+def test_opening_family():
+    f = fetch.opening_family
+    assert f("Caro Kann Defense Exchange Variation 3...cxd5 4.Nf3") == "Caro Kann Defense"
+    assert f("Queens Pawn Opening Zukertort Chigorin Variation 3.Bf4 Nf6 4.e3") == "Queens Pawn Opening"
+    assert f("Englund Gambit 2.dxe5 Nc6 3.Nf3") == "Englund Gambit"
+    assert f("Old Benoni Defense 2.dxc5 e6") == "Old Benoni Defense"
+    assert f("Nimzo Larsen 1.b3 e5") == "Nimzo Larsen"
+    assert f("") == "Unknown"

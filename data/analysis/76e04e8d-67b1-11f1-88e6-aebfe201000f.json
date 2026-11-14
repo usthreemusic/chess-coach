@@ -1,1 +1,1 @@
-{"id":"76e04e8d-67b1-11f1-88e6-aebfe201000f","depth":14,"start_cp":29,"moves":[{"san":"d4","uci":"d2d4","best":"e4","best_uci":"e2e4","pv":["e4","e5","Nf3"],"cp":18,"clk":598.3}],"counts":{"inaccuracy":0,"mistake":0,"blunder":0}}
+{"id":"76e04e8d-67b1-11f1-88e6-aebfe201000f","depth":14,"start_cp":21,"moves":[{"san":"d4","uci":"d2d4","best":"e4","best_uci":"e2e4","pv":["e4","e5","Nc3"],"cp":17,"clk":598.3}],"counts":{"inaccuracy":0,"mistake":0,"blunder":0}}

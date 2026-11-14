@@ -8,6 +8,7 @@ Personal chess.com game review coach. A Python pipeline fetches and analyses gam
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python pipeline/fetch.py        # incremental fetch from chess.com
 .venv/bin/python pipeline/analyse.py      # Stockfish analysis of games not yet analysed (needs `brew install stockfish`)
+.venv/bin/python pipeline/puzzles.py     # build data/puzzles.json from my mistakes and blunders
 python3 -m http.server -d site 8000       # then open http://localhost:8000
 ```
 

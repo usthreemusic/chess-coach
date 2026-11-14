@@ -225,7 +225,8 @@ async function init() {
       show(step);
     }
   });
-  show(0);
+  const ply = parseInt(new URLSearchParams(location.search).get("ply"), 10);
+  show(ply > 0 ? ply - 1 : 0);
 }
 
 init();

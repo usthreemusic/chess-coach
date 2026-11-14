@@ -1,4 +1,6 @@
 username = "robbosloth"
+# Only games from this month onwards are fetched, analysed and trained on
+since = "2026-01"
 
 analysis_depth = 14
 stockfish_path = "stockfish"

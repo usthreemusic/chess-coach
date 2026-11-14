@@ -49,10 +49,29 @@ def opening_name(eco_url):
     return eco_url.rstrip("/").rsplit("/", 1)[-1].replace("-", " ")
 
 
+FAMILY_ENDINGS = {"Opening", "Defense", "Game", "Gambit", "Attack", "System"}
+
+
+def opening_family(name):
+    """Reduce an opening name to its family, e.g. "Caro Kann Defense Exchange Variation" -> "Caro Kann Defense"."""
+    words = name.split()
+    if not words:
+        return "Unknown"
+    for i, word in enumerate(words):
+        if word in FAMILY_ENDINGS:
+            return " ".join(words[: i + 1])
+    for i, word in enumerate(words):
+        if any(ch.isdigit() for ch in word):
+            return " ".join(words[:i]) or "Unknown"
+    return " ".join(words)
+
+
 def normalise(game, username):
     """Reduce a chess.com API game to the fields we keep. None if unusable."""
     pgn = game.get("pgn")
     if not pgn or game.get("rules") != "chess":
+        return None
+    if '[SetUp "1"]' in pgn:  # custom starting position, not a standard game
         return None
     colour = "white" if game["white"]["username"].lower() == username else "black"
     me = game[colour]
@@ -112,7 +131,7 @@ def main():
     for url in urls:  # sequential on purpose: chess.com rate-limits parallel requests
         year, mon = url.rstrip("/").rsplit("/", 2)[-2:]
         month = f"{year}-{mon}"
-        if not needs_fetch(month, current_month):
+        if month < config.get("since", "") or not needs_fetch(month, current_month):
             continue
         raw = get_json(url)["games"]
         games = [g for g in (normalise(r, username) for r in raw) if g]
