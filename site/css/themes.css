@@ -355,3 +355,54 @@
 :root[data-theme="dos"] cg-board square.selected { background-color: rgba(0, 0, 170, 0.6); }
 :root[data-theme="dos"] cg-board square.move-dest { background: radial-gradient(rgba(0, 0, 0, 0.55) 22%, rgba(0, 0, 0, 0) 0); }
 :root[data-theme="dos"] cg-board square.oc.move-dest { background: radial-gradient(transparent 0%, transparent 80%, rgba(0, 0, 0, 0.5) 80%); }
+
+/* ====================================================================
+   APP SHELL (welcome panel, player chip, sync strip, text input)
+   ==================================================================== */
+/* Pastel */
+:root[data-theme="pastel"] input[type="text"] {
+  background: #fff; color: #2a1a5e; border: 3px solid #2a1a5e; border-radius: 6px; box-shadow: 3px 3px 0 #2a1a5e; min-height: 36px;
+}
+:root[data-theme="pastel"] #sync-status { background: #ffe9a8; color: #2a1a5e; border-bottom: 3px solid #2a1a5e; padding: 4px 16px; font-size: 18px; margin-bottom: 6px; }
+:root[data-theme="pastel"] #sync-status progress { accent-color: #5b35c9; height: 16px; }
+:root[data-theme="pastel"] #sync-status button { min-height: 28px; }
+:root[data-theme="pastel"] .welcome { background: #fff; border: 3px solid #2a1a5e; border-radius: 0; box-shadow: 6px 6px 0 #2a1a5e; margin-bottom: 14px; padding: 12px 14px; }
+:root[data-theme="pastel"] .welcome::before {
+  content: "Hello.exe"; display: block; margin: -12px -14px 12px; padding: 2px 10px; background: #f25ca2; color: #2a1a5e;
+  border-bottom: 3px solid #2a1a5e; font-size: 18px;
+}
+:root[data-theme="pastel"] .welcome h2 { font-size: 24px; font-weight: 400; }
+:root[data-theme="pastel"] .welcome-form button { background: #ffc21a; }
+:root[data-theme="pastel"] .welcome-form button:hover { background: #ffd966; }
+:root[data-theme="pastel"] .welcome-error { color: #b3206a; }
+
+/* Windows 95 */
+:root[data-theme="win95"] input[type="text"] {
+  background: #fff; color: #000; border: 2px solid; border-color: #808080 #fff #fff #808080; border-radius: 0; box-shadow: inset 1px 1px 0 #404040; min-height: 36px;
+}
+:root[data-theme="win95"] #sync-status { background: #c0c0c0; color: #000; border-bottom: 2px solid #808080; box-shadow: 0 1px 0 #fff; }
+:root[data-theme="win95"] #sync-status progress { accent-color: #000080; }
+:root[data-theme="win95"] #sync-status button { min-height: 24px; }
+:root[data-theme="win95"] .player-name { font-weight: 700; }
+:root[data-theme="win95"] .welcome {
+  background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff; box-shadow: 1px 1px 0 #000; border-radius: 0; padding: 0 16px 16px;
+}
+:root[data-theme="win95"] .welcome::before {
+  content: "Welcome"; display: block; margin: 0 -16px 12px; padding: 2px 8px; background: #000080; color: #fff; font-weight: 700;
+}
+:root[data-theme="win95"] .welcome h2 { font-size: 16px; }
+:root[data-theme="win95"] .welcome-form button { font-weight: 700; }
+:root[data-theme="win95"] .welcome-error { color: #a00000; }
+
+/* DOS */
+:root[data-theme="dos"] input[type="text"] {
+  background: #aaaaaa; color: #000; border: 2px solid #fff; border-radius: 0; box-shadow: 4px 4px 0 #000; min-height: 36px;
+}
+:root[data-theme="dos"] #sync-status { background: #0000aa; color: #fff; border-bottom: 2px solid #fff; }
+:root[data-theme="dos"] #sync-status progress { accent-color: #ffff55; }
+:root[data-theme="dos"] #sync-status button { min-height: 28px; }
+:root[data-theme="dos"] .welcome { background: #0000aa; border: 4px double #fff; border-radius: 0; }
+:root[data-theme="dos"] .welcome h2 { color: #ffff55; font-weight: 400; font-size: 24px; text-transform: uppercase; }
+:root[data-theme="dos"] .welcome-error { color: #ff7777; }
+:root[data-theme="dos"] .welcome-note { color: #d0d0d0; }
+:root[data-theme="pastel"] .welcome-note, :root[data-theme="dos"] .welcome-note { font-size: inherit; }

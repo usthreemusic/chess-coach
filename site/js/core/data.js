@@ -1,0 +1,131 @@
+// Facade the pages use: reads the local store and derives the same shapes as the old data/*.json files.
+import * as store from "./store.js";
+import { buildPuzzles } from "./puzzles.js";
+import { buildStats } from "./stats.js";
+import { ratingBand, pickThemed } from "./themed.js";
+
+const USER_KEY = "chess-coach-user";
+const CHANNEL = "chess-coach";
+
+export function currentUser() {
+  try {
+    const v = localStorage.getItem(USER_KEY);
+    return v ? v.trim().toLowerCase() || null : null;
+  } catch (e) { return null; }
+}
+export function setUser(name) {
+  const v = String(name || "").trim().toLowerCase();
+  try { if (v) localStorage.setItem(USER_KEY, v); } catch (e) { /* private mode */ }
+  invalidate();
+  return v || null;
+}
+export function clearUser() {
+  try { localStorage.removeItem(USER_KEY); } catch (e) { /* ignore */ }
+  invalidate();
+}
+
+// ---- memoisation, keyed by username, cleared on any change ----
+let cache = new Map();
+function memo(key, fn) {
+  const user = currentUser();
+  const k = user + "|" + key;
+  if (!cache.has(k)) {
+    const p = fn(user);
+    p.catch(() => { if (cache.get(k) === p) cache.delete(k); });
+    cache.set(k, p);
+  }
+  return cache.get(k);
+}
+function invalidate() { cache = new Map(); }
+
+const monthOf = (t) => new Date(t * 1000).toISOString().slice(0, 7);
+
+export function loadGames() {
+  return memo("games", async (user) => {
+    if (!user) return { username: null, games: [] };
+    const [all, index] = await Promise.all([store.getGames(user), store.getAnalysisIndex(user)]);
+    const games = all.map((g) => {
+      const { pgn, ...rest } = g;
+      const entry = { ...rest, month: monthOf(g.end_time) };
+      const rec = index.get(g.id);
+      if (rec && rec.counts) entry.mistakes = rec.counts;
+      return entry;
+    });
+    return { username: user, games };
+  });
+}
+
+export async function loadAnalysis(id) {
+  const user = currentUser();
+  if (!user) return null;
+  return (await store.getAnalysis(user, id)) || null;
+}
+
+// Games (with pgn) paired with their analysis, oldest first.
+function loadPairs() {
+  return memo("pairs", async (user) => {
+    if (!user) return [];
+    const [games, analyses] = await Promise.all([store.getGames(user), store.getAnalyses(user)]);
+    const pairs = [];
+    for (const game of games) {
+      const analysis = analyses.get(game.id);
+      if (analysis) pairs.push({ game, analysis });
+    }
+    return pairs;
+  });
+}
+
+export function loadPuzzles() {
+  return memo("puzzles", async () => {
+    const pairs = await loadPairs();
+    const puzzles = [];
+    for (const { game, analysis } of pairs) puzzles.push(...buildPuzzles(game, analysis));
+    puzzles.sort((a, b) => (a.end_time - b.end_time) || (a.ply - b.ply));
+    return { puzzles };
+  });
+}
+
+export function loadStats() {
+  return memo("stats", async () => {
+    const pairs = await loadPairs();
+    return pairs.length ? buildStats(pairs) : null;
+  });
+}
+
+export function loadThemed(total = 2000) {
+  return memo("themed:" + total, async () => {
+    const [{ games }, { puzzles: mine }] = await Promise.all([loadGames(), loadPuzzles()]);
+    const band = ratingBand(games);
+    const resp = await fetch("data/themed/" + band + ".json");
+    if (!resp.ok) throw new Error("Could not load themed puzzles for band " + band + " (HTTP " + resp.status + ")");
+    const pool = await resp.json();
+    const tagCounts = {};
+    for (const p of mine) for (const t of p.tags || []) if (t !== "other") tagCounts[t] = (tagCounts[t] || 0) + 1;
+    return { source: pool.source, band: pool.band, puzzles: pickThemed(pool.puzzles, tagCounts, total) };
+  });
+}
+
+// ---- change notification ----
+let ownChannel = null;
+try { if (typeof BroadcastChannel !== "undefined") ownChannel = new BroadcastChannel(CHANNEL); } catch (e) { ownChannel = null; }
+const subscribers = new Set();
+
+function onRaw(detail) {
+  invalidate();
+  for (const s of subscribers) s(detail);
+}
+if (ownChannel) ownChannel.onmessage = (ev) => onRaw(ev.data);
+if (typeof window !== "undefined") window.addEventListener("coach-data", (ev) => onRaw(ev.detail));
+
+/** Subscribe to data changes (this page and other tabs). Returns unsubscribe. */
+export function onDataChanged(callback) {
+  // The same change can arrive twice in one page (window event + channel), so coalesce.
+  let timer = null, last = null;
+  const sub = (detail) => {
+    last = detail;
+    if (timer) return;
+    timer = setTimeout(() => { timer = null; try { callback(last); } catch (e) { console.error(e); } }, 150);
+  };
+  subscribers.add(sub);
+  return () => { subscribers.delete(sub); if (timer) { clearTimeout(timer); timer = null; } };
+}

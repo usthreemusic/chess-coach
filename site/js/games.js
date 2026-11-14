@@ -1,3 +1,6 @@
+import { ready, onRefresh } from "./app.js";
+import { loadGames } from "./core/data.js";
+
 const PAGE = 200;
 const $ = (id) => document.getElementById(id);
 let games = [];
@@ -66,23 +69,40 @@ function render() {
   $("more").hidden = list.length <= shown;
 }
 
-async function init() {
-  try {
-    const resp = await fetch("data/games.json");
-    if (!resp.ok) throw new Error(resp.status);
-    games = (await resp.json()).games;
-  } catch (err) {
-    $("summary").textContent = "Could not load data/games.json. Run pipeline/fetch.py first.";
+function fillClassOptions() {
+  const select = $("f-class");
+  const have = new Set([...select.options].map((o) => o.value));
+  for (const cls of [...new Set(games.map((g) => g.time_class))].sort()) {
+    if (!have.has(cls)) select.add(new Option(cls, cls));
+  }
+}
+
+async function refresh() {
+  const data = await loadGames();
+  games = data.games;
+  fillClassOptions();
+  if (!games.length) {
+    $("summary").textContent = "Fetching your games from chess.com…";
+    $("rows").replaceChildren();
+    $("empty").hidden = true;
+    $("more").hidden = true;
     return;
   }
-  for (const cls of [...new Set(games.map((g) => g.time_class))].sort()) {
-    $("f-class").add(new Option(cls, cls));
-  }
+  render();
+}
+
+async function init() {
+  await ready;
   for (const id of ["f-class", "f-colour", "f-result", "f-order"]) {
     $(id).addEventListener("change", () => { shown = PAGE; render(); });
   }
   $("more").addEventListener("click", () => { shown += PAGE; render(); });
-  render();
+  try {
+    await refresh();
+  } catch (err) {
+    $("summary").textContent = "Could not read your games from this browser's storage: " + err.message;
+  }
+  onRefresh(refresh);
 }
 
 init();

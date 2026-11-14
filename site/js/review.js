@@ -1,5 +1,7 @@
 import { Chessground } from "../vendor/chessground.min.js";
 import { Chess } from "../vendor/chess.js";
+import { ready, onRefresh } from "./app.js";
+import { loadGames, loadAnalysis } from "./core/data.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -137,7 +139,7 @@ function buildGraph() {
   };
 }
 
-function buildHeader(games, position) {
+function buildHeader() {
   const date = new Date(game.end_time * 1000).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
   const title = $("title");
   title.replaceChildren(
@@ -158,35 +160,29 @@ function buildHeader(games, position) {
   link.rel = "noopener";
   $("meta").append(link);
 
+}
+
+function setNeighbours(analysed) {
+  const position = analysed.findIndex((g) => g.id === game.id);
   const neighbour = (id, other) => {
     $(id).hidden = !other;
     if (other) $(id).href = `review.html?id=${encodeURIComponent(other.id)}`;
   };
-  neighbour("older", games[position - 1]);
-  neighbour("newer", games[position + 1]);
+  neighbour("older", position > 0 ? analysed[position - 1] : null);
+  neighbour("newer", position >= 0 ? analysed[position + 1] : null);
 }
 
-async function init() {
-  const fail = (message) => {
-    $("status").textContent = message;
-    $("status").hidden = false;
-  };
-  let games;
-  try {
-    games = (await (await fetch("data/games.json")).json()).games;
-  } catch (err) {
-    return fail("Could not load data/games.json.");
-  }
-  const wanted = new URLSearchParams(location.search).get("id");
-  const analysed = games.filter((g) => g.mistakes);
-  game = wanted ? games.find((g) => g.id === wanted) : analysed[analysed.length - 1];
-  if (!game) return fail(wanted ? "Game not found." : "No games have been analysed yet.");
-  if (!game.mistakes) return fail("This game has not been analysed yet. It will be picked up by the next update.");
+const wanted = new URLSearchParams(location.search).get("id");
+let mounted = false;
 
-  const resp = await fetch(`data/analysis/${encodeURIComponent(game.id)}.json`);
-  if (!resp.ok) return fail("Could not load the analysis for this game.");
-  analysis = await resp.json();
+function notice(message) {
+  $("status").textContent = message;
+  $("status").hidden = false;
+}
 
+function mount(chosen, loaded, analysed) {
+  game = chosen;
+  analysis = loaded;
   const chess = new Chess();
   fens = [chess.fen()];
   for (const move of analysis.moves) {
@@ -194,6 +190,7 @@ async function init() {
     fens.push(chess.fen());
   }
 
+  $("status").hidden = true;
   $("review").hidden = false;
   board = Chessground($("board"), {
     fen: fens[0],
@@ -203,7 +200,9 @@ async function init() {
     drawable: { enabled: false, visible: true },
   });
   $("bar").classList.toggle("flipped", game.colour === "black");
-  buildHeader(analysed, analysed.indexOf(game));
+  buildHeader();
+  setNeighbours(analysed);
+  $("engine-label").textContent = `Stockfish, depth ${analysis.depth}`;
   buildMoves();
   buildGraph();
 
@@ -227,6 +226,41 @@ async function init() {
   });
   const ply = parseInt(new URLSearchParams(location.search).get("ply"), 10);
   show(ply > 0 ? ply - 1 : 0);
+}
+
+// Runs on load and whenever data changes. Once a game is on screen it only refreshes the
+// older/newer links, so the position being studied is never replaced under the user.
+async function refresh() {
+  const { games } = await loadGames();
+  const analysed = games.filter((g) => g.mistakes);
+  if (mounted) return setNeighbours(analysed);
+
+  let chosen;
+  if (wanted) {
+    chosen = games.find((g) => g.id === wanted);
+    if (!chosen) return notice(games.length
+      ? "Game not found."
+      : "Your games are still being fetched from chess.com. This page will open the game when it arrives.");
+  } else {
+    chosen = analysed[analysed.length - 1];
+    if (!chosen) return notice("Waiting for the first game to be analysed. It will open here automatically.");
+  }
+  const loaded = chosen.mistakes ? await loadAnalysis(chosen.id) : null;
+  if (!loaded) {
+    return notice("This game has not been analysed yet. It will be analysed shortly and opened here automatically.");
+  }
+  mounted = true;
+  mount(chosen, loaded, analysed);
+}
+
+async function init() {
+  await ready;
+  try {
+    await refresh();
+  } catch (err) {
+    notice("Could not read your games from this browser's storage: " + err.message);
+  }
+  onRefresh(refresh);
 }
 
 // Chessground caches where the board sits on the page. Refresh that whenever the

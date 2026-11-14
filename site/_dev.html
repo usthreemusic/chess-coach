@@ -1,0 +1,63 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>coach dev</title></head>
+<body>
+<h3>Chess coach data layer (dev)</h3>
+<input id="user" placeholder="chess.com username">
+<button id="start">Start</button> <button id="stop">Stop</button> <button id="show">Show data</button>
+<button id="clear">Delete stored data for user</button>
+<pre id="out"></pre>
+<script type="module">
+import { startSync } from "./js/core/sync.js";
+import { loadGames, loadPuzzles, loadStats, setUser, currentUser, onDataChanged } from "./js/core/data.js";
+import * as store from "./js/core/store.js";
+
+const out = document.getElementById("out");
+const input = document.getElementById("user");
+input.value = currentUser() || "";
+let run = null, t0 = 0, lastAt = 0, perGame = [];
+
+function log(s) { out.textContent += s + "\n"; }
+function logErr(e) { log("ERROR: " + (e && e.stack ? e.stack : e)); }
+window.addEventListener("error", (ev) => logErr(ev.error || ev.message));
+window.addEventListener("unhandledrejection", (ev) => logErr(ev.reason));
+
+document.getElementById("start").onclick = () => {
+  const name = input.value.trim().toLowerCase();
+  if (!name) return log("Enter a username");
+  if (run) return log("Already running");
+  setUser(name);
+  out.textContent = "";
+  perGame = []; t0 = lastAt = performance.now();
+  log("Starting sync for " + name + " (hardwareConcurrency=" + navigator.hardwareConcurrency + ")");
+  run = startSync(name, { onProgress: (p) => {
+    const now = performance.now();
+    if (p.phase === "analyse" && p.done > 0) { perGame.push(now - lastAt); lastAt = now; }
+    log("[" + ((now - t0) / 1000).toFixed(1) + "s] " + p.phase + " " + p.done + "/" + p.total + " " + (p.message || ""));
+    if (p.error) logErr(p.error);
+  } });
+  run.done.then(() => { log("sync finished"); run = null; return show(); }).catch((e) => { logErr(e); run = null; });
+};
+document.getElementById("stop").onclick = () => { if (run) { run.stop(); log("stop requested"); } };
+document.getElementById("show").onclick = () => show().catch(logErr);
+document.getElementById("clear").onclick = async () => {
+  try { await store.deleteUser(input.value); log("deleted stored data for " + input.value); } catch (e) { logErr(e); }
+};
+onDataChanged((d) => log("(data changed: " + JSON.stringify(d) + ")"));
+
+async function show() {
+  const { username, games } = await loadGames();
+  const analysed = games.filter((g) => g.mistakes);
+  log("--- data for " + username + " ---");
+  log("games: " + games.length + ", analysed: " + analysed.length);
+  const { puzzles } = await loadPuzzles();
+  log("puzzles: " + puzzles.length);
+  const stats = await loadStats();
+  log("stats: " + (stats ? JSON.stringify(stats.totals || Object.keys(stats)) : "null (nothing analysed)"));
+  if (perGame.length) {
+    const avg = perGame.reduce((a, b) => a + b, 0) / perGame.length;
+    log("analysis completions this run: " + perGame.length + ", mean gap between completions " + (avg / 1000).toFixed(2) + "s (wall-clock; concurrent games overlap)");
+    log("total analyse time: " + ((perGame.reduce((a, b) => a + b, 0)) / 1000).toFixed(1) + "s");
+  }
+}
+</script>
+</body></html>

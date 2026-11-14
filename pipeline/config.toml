@@ -1,22 +1,5 @@
-username = "robbosloth"
-# Only games from this month onwards are fetched, analysed and trained on
-since = "2026-01"
-
-analysis_depth = 14
-stockfish_path = "stockfish"
-# Moves are not labelled once I am this far behind, or still this far ahead after the move
-decided_cp = 600
-# In puzzles, a move this close to the engine's best move is also accepted
-alt_margin_cp = 50
-
-[thresholds]  # centipawn drop from my perspective
-inaccuracy = 50
-mistake = 100
-blunder = 200
-
-[themed]  # pipeline/lichess.py: slice of the Lichess puzzle database
-rating_min = 800
-rating_max = 1300
-total = 2000
+# Used by pipeline/lichess.py only. Game analysis settings now live in site/js/core/config.js.
+[themed]  # generic per-band slices of the Lichess puzzle database
+per_tag = 120  # puzzles kept per rating band and tag
 min_popularity = 80
 min_plays = 500

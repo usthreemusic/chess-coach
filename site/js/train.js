@@ -1,5 +1,7 @@
 import { Chessground } from "../vendor/chessground.min.js";
 import { Chess } from "../vendor/chess.js";
+import { ready, onRefresh } from "./app.js";
+import { loadPuzzles, loadThemed } from "./core/data.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -9,8 +11,23 @@ const el = (tag, className, text) => {
   return node;
 };
 
-const STORE_KEY = "chess-coach-puzzles";
-const FILTER_KEY = "chess-coach-train-filters";
+// Progress and filters are stored per player: "<base>:<username>".
+const STORE_BASE = "chess-coach-puzzles";
+const FILTER_BASE = "chess-coach-train-filters";
+let STORE_KEY = STORE_BASE;
+let FILTER_KEY = FILTER_BASE;
+
+// Copy the old un-suffixed value into the per-player key, once, if the per-player key is missing.
+function migrateKey(base, key) {
+  try {
+    if (localStorage.getItem(key) === null) {
+      const old = localStorage.getItem(base);
+      if (old !== null) localStorage.setItem(key, old);
+    }
+  } catch (err) {
+    // storage unavailable
+  }
+}
 const DAY = 86400000;
 const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21]; // indexed by box, 1-5
 const LEARNED_BOX = 4;
@@ -28,11 +45,12 @@ const TAG_LABELS = {
 const tagLabel = (tag) => TAG_LABELS[tag] || tag;
 
 let puzzles = []; // every puzzle from my games
-let themed = null; // Lichess puzzles, or null when data/themed.json is missing
+let themed = null; // Lichess puzzles, or null when the themed pool could not be loaded
 let pool = []; // puzzles matching the filters
 let filters = { mode: "games", opening: "all", colour: "both", tag: "all", weakness: "all" };
 let state = {};
 let board, current, answered;
+let wantedTag = null; // ?tag= from the URL, applied once puzzles with that tag exist
 // Themed puzzles: the live position, the index of the next solution move, the last move shown
 let chess, step, lastMove, playToken = 0;
 
@@ -383,7 +401,13 @@ function showDone() {
   playToken++;
   $("puzzle").hidden = true;
   if (isThemed() && !themed) {
-    $("done").textContent = "Themed puzzles are not available yet. They are built by running pipeline/lichess.py, which writes data/themed.json.";
+    $("done").textContent = "Themed puzzles could not be loaded. Check your connection and reload the page.";
+    $("done").hidden = false;
+    updateCounts();
+    return;
+  }
+  if (!isThemed() && !puzzles.length) {
+    $("done").textContent = "Analysing your games — puzzles appear as soon as the first game is done.";
     $("done").hidden = false;
     updateCounts();
     return;
@@ -443,42 +467,39 @@ async function importProgress(file) {
   if (!current) advance();
 }
 
-async function init() {
-  const fail = (message) => {
-    $("status").textContent = message;
-    $("status").hidden = false;
-  };
-  const load = async (url) => {
-    try {
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(resp.status);
-      return (await resp.json()).puzzles;
-    } catch (err) {
-      return null;
-    }
-  };
-  const mine = await load("data/puzzles.json");
-  themed = await load("data/themed.json");
-  if (!mine && !themed) {
-    return fail("Could not load data/puzzles.json. Puzzles appear once games have been analysed.");
-  }
-  puzzles = mine || [];
+// Load the current puzzle pools and rebuild the dropdowns and counts. The puzzle on the board stays.
+async function refreshData() {
+  const [mine, extra] = await Promise.all([loadPuzzles(), loadThemed().catch(() => null)]);
+  puzzles = mine.puzzles;
   for (const p of puzzles) p.key = p.id;
+  themed = extra ? extra.puzzles : null;
   for (const p of themed || []) p.key = `L:${p.id}`; // cannot collide with game puzzle ids
-  state = loadState();
-  filters = loadFilters();
-  if (filters.mode !== "themed") filters.mode = "games";
-  // ?tag=<mistake type> overrides the saved filter; unknown values are ignored
-  const wanted = new URLSearchParams(location.search).get("tag");
-  if (wanted && puzzles.some((p) => (p.tags || []).includes(wanted))) {
+  if (wantedTag && puzzles.some((p) => (p.tags || []).includes(wantedTag))) {
     filters.mode = "games";
-    filters.tag = wanted;
+    filters.tag = wantedTag;
+    wantedTag = null;
+    saveFilters();
   }
   buildOpeningOptions();
   buildTagOptions();
   applyFilters();
   buildWeaknessOptions();
   syncFilterControls();
+  updateCounts();
+  if (!current) advance();
+}
+
+async function init() {
+  const user = await ready;
+  STORE_KEY = `${STORE_BASE}:${user}`;
+  FILTER_KEY = `${FILTER_BASE}:${user}`;
+  migrateKey(STORE_BASE, STORE_KEY);
+  migrateKey(FILTER_BASE, FILTER_KEY);
+  state = loadState();
+  filters = loadFilters();
+  if (filters.mode !== "themed") filters.mode = "games";
+  // ?tag=<mistake type> overrides the saved filter; unknown values are ignored
+  wantedTag = new URLSearchParams(location.search).get("tag");
 
   $("train").hidden = false;
   board = Chessground($("board"), {
@@ -516,7 +537,13 @@ async function init() {
   $("filter-opening").onchange = onFilter;
   $("filter-colour").onchange = onFilter;
   $("filter-tag").onchange = onFilter;
-  advance();
+  try {
+    await refreshData();
+  } catch (err) {
+    $("status").textContent = "Could not read your games from this browser's storage: " + err.message;
+    $("status").hidden = false;
+  }
+  onRefresh(refreshData);
 }
 
 // Chessground caches where the board sits on the page. Refresh that whenever the

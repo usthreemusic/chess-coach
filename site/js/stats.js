@@ -1,3 +1,6 @@
+import { ready, onRefresh } from "./app.js";
+import { loadPuzzles as loadDataPuzzles, loadStats } from "./core/data.js";
+
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
   const node = document.createElement(tag);
@@ -6,24 +9,14 @@ const el = (tag, className, text) => {
   return node;
 };
 
-// The ONLY place the puzzle data is fetched. Cached after the first call; returns null if unavailable.
-let puzzlesPromise = null;
-function loadPuzzles() {
-  if (!puzzlesPromise) {
-    puzzlesPromise = (async () => {
-      try {
-        const res = await fetch("data/puzzles.json");
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const body = await res.json();
-        if (!body || !Array.isArray(body.puzzles)) throw new Error("unexpected format");
-        return body.puzzles;
-      } catch (err) {
-        puzzlesPromise = null; // allow a retry next time
-        return null;
-      }
-    })();
+// The ONLY place the puzzle data is read: the data layer. Returns null if unavailable.
+async function loadPuzzles() {
+  try {
+    const body = await loadDataPuzzles();
+    return body && Array.isArray(body.puzzles) ? body.puzzles : null;
+  } catch (err) {
+    return null;
   }
-  return puzzlesPromise;
 }
 
 // HELPERS-START (pure; also exercised by a scratch Node script)
@@ -527,27 +520,34 @@ function showStatus(message) {
   $("stats").hidden = true;
 }
 
-async function init() {
-  try {
-    const res = await fetch("data/stats.json");
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    data = await res.json();
-    if (!data || !data.dimensions) throw new Error("unexpected format");
-  } catch (err) {
-    showStatus("Stats are not available yet. They are built after games have been analysed.");
-    return;
+const REFRESH_MS = 15000; // rebuilding stats replays every game, so refresh slowly while analysing
+
+async function refresh() {
+  const next = await loadStats();
+  if (!next || !next.moves) {
+    data = null;
+    return showStatus("Analysing your games — stats appear as soon as the first game is done.");
   }
-  if (!data.moves) {
-    showStatus("No analysed games yet, so there are no stats to show.");
-    return;
-  }
+  data = next;
+  $("status").hidden = true;
   $("stats").hidden = false;
+  $("weaknesses").replaceChildren();
   renderWeaknesses(renderSummary());
   renderCharts();
+}
+
+async function init() {
+  await ready;
+  try {
+    await refresh();
+  } catch (err) {
+    showStatus("Could not read your games from this browser's storage: " + err.message);
+  }
   // Colours come from CSS variables, so redraw when the colour scheme changes
-  const mq = window.matchMedia("(prefers-color-scheme: dark)");
-  mq.addEventListener("change", renderCharts);
-  window.addEventListener("themechange", renderCharts);
+  const redraw = () => { if (data) renderCharts(); };
+  window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", redraw);
+  window.addEventListener("themechange", redraw);
+  onRefresh(refresh, REFRESH_MS);
 }
 
 init();

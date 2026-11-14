@@ -26,41 +26,49 @@ def test_invalid_rows_are_dropped():
     assert lichess.row_to_puzzle({**ROW, "Rating": "high"}, "x") is None
 
 
-def test_allocate_proportional_with_minimum():
-    quota = lichess.allocate({"a": 600, "b": 300, "c": 90, "d": 10, "e": 0}, 1000, minimum=100)
-    assert sum(quota.values()) == 1000
-    assert "e" not in quota
-    assert quota["c"] == quota["d"] == 100  # small tags are lifted to the minimum
-    assert quota["a"] > quota["b"] > 100
-    assert abs(quota["a"] - 2 * quota["b"]) <= 1  # 600:300 stays in proportion
+def row(pid, plays, themes, rating="1000", pop="90"):
+    return {**ROW, "PuzzleId": pid, "NbPlays": str(plays), "Themes": themes, "Rating": rating, "Popularity": pop}
 
 
-def test_allocate_edge_cases():
-    assert lichess.allocate({}, 1000) == {}
-    assert lichess.allocate({"a": 5, "b": 5, "c": 5}, 200, minimum=100) == {"a": 100, "b": 100, "c": 100}
-    assert lichess.allocate({"a": 1, "b": 1}, 10, minimum=1) == {"a": 5, "b": 5}
+CFG = {"per_tag": 2, "min_popularity": 80, "min_plays": 500}
 
 
-def test_select_one_tag_per_puzzle_and_most_played_first():
-    cfg = {"rating_min": 800, "rating_max": 1300, "min_popularity": 80, "min_plays": 500}
+def test_band_of_and_qualifies():
+    assert lichess.band_of(row("a", 1, "x", rating="600")) == 600
+    assert lichess.band_of(row("a", 1, "x", rating="799")) == 600
+    assert lichess.band_of(row("a", 1, "x", rating="800")) == 800
+    assert lichess.band_of(row("a", 1, "x", rating="1999")) == 1800
+    assert lichess.band_of(row("a", 1, "x", rating="599")) is None
+    assert lichess.band_of(row("a", 1, "x", rating="2000")) is None
+    assert lichess.qualifies(row("a", 600, "x", rating="1250"), CFG) == 1200
+    assert lichess.qualifies(row("a", 499, "x"), CFG) is None  # too few plays
+    assert lichess.qualifies(row("a", 600, "x", pop="79"), CFG) is None  # not popular enough
+    assert lichess.qualifies(row("a", 600, "x", rating="oops"), CFG) is None
 
-    def row(pid, plays, themes, rating="1000", pop="90"):
-        return {**ROW, "PuzzleId": pid, "NbPlays": str(plays), "Themes": themes, "Rating": rating, "Popularity": pop}
 
+def test_select_per_band_one_tag_per_puzzle_and_most_played_first():
     rows = [
         row("p1", 5000, "hangingPiece"),
         row("p2", 4000, "hangingPiece defensiveMove"),
         row("p3", 3000, "defensiveMove"),
         row("p4", 9000, "fork"),
         row("low", 100, "fork"),  # too few plays
-        row("hard", 9000, "fork", rating="2000"),  # outside the rating range
         row("p5", 3000, "fork"),
+        row("p6", 3500, "fork"),
+        row("hard", 9000, "fork", rating="1250"),  # lands in another band
+        row("easy", 9000, "fork", rating="500"),  # below every band
+        row("none", 9000, "opening"),  # no tag has this theme
     ]
-    out = lichess.select(rows, {"missed_capture": 2, "hung_piece": 1, "missed_fork": 1}, cfg)
-    by_tag = {}
-    for p in out:
-        by_tag.setdefault(p["tag"], []).append(p["id"])
-    assert by_tag["missed_capture"] == ["p1", "p2"]
-    assert by_tag["hung_piece"] == ["p3"]  # p1 and p2 already used; only p3 remains
-    assert by_tag["missed_fork"] == ["p4"]
-    assert len({p["id"] for p in out}) == len(out)
+    out = lichess.select(rows, CFG, bands=[1000, 1200])
+    assert set(out) == {1000, 1200}
+    assert set(out[1000]) == set(lichess.TAG_THEMES)
+    ids = {tag: [p["id"] for p in puzzles] for tag, puzzles in out[1000].items()}
+    assert ids["missed_fork"] == ["p4", "p6"]  # per_tag caps at 2, most played first
+    # tags with fewer candidates pick first: missed_capture (p1, p2) before hung_piece (p1, p2, p3)
+    assert ids["missed_capture"] == ["p1", "p2"]
+    assert ids["hung_piece"] == ["p3"]
+    assert ids["missed_mate"] == [] and ids["back_rank"] == []
+    assert all(p["tag"] == tag for tag, ps in out[1000].items() for p in ps)
+    assert [p["id"] for p in out[1200]["missed_fork"]] == ["hard"]
+    seen = [p["id"] for ps in out[1000].values() for p in ps]
+    assert len(seen) == len(set(seen))  # a puzzle is used once per band
