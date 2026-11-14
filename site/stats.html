@@ -16,6 +16,19 @@
     <a href="stats.html" class="active">Stats</a>
   </nav>
 </header>
-<main><div class="empty">Your weakness breakdown arrives with Phase 4.</div></main>
+<main>
+  <div class="empty" id="status" hidden></div>
+  <div id="stats" hidden>
+    <p class="summary" id="summary"></p>
+    <section class="weak">
+      <h2>Biggest weaknesses</h2>
+      <ul id="weaknesses"></ul>
+      <p class="muted">Error rate = mistakes and blunders per 100 of your moves. Only groups with at least 150 moves are ranked.</p>
+    </section>
+    <div class="chart-grid" id="charts"></div>
+  </div>
+</main>
+<script src="vendor/chart.umd.min.js"></script>
+<script type="module" src="js/stats.js"></script>
 </body>
 </html>

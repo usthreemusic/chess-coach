@@ -137,3 +137,18 @@ td a { color: var(--accent); }
 #result .solved { color: var(--win); font-weight: 600; }
 #result .failed { color: var(--loss); font-weight: 600; }
 .train-done { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 16px; }
+
+/* Stats page */
+.weak { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; margin-bottom: 16px; }
+.weak h2, .chart-card h2 { font-size: 16px; margin: 0 0 8px; }
+.weak ul { margin: 0 0 8px; padding-left: 20px; }
+.weak li { margin-bottom: 4px; }
+.weak p { margin: 0; font-size: 14px; }
+.chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+.chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-width: 0; }
+.chart-card.wide { grid-column: 1 / -1; }
+.chart-card .muted { margin: 0 0 8px; font-size: 14px; }
+.chart-box { position: relative; width: 100%; }
+@media (min-width: 800px) {
+  .chart-grid { grid-template-columns: 1fr 1fr; }
+}
