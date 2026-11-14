@@ -237,14 +237,26 @@ function lineChart(canvas, rows, colours) {
           title: { display: true, text: "Errors per 100 moves", color: colours.muted },
         },
       },
-      plugins: { legend: { display: false }, tooltip: baseTooltip(rows, colours) },
+      plugins: {
+        legend: { display: false },
+        // Sit below the point with a long arrow, so the tooltip does not cover the line.
+        tooltip: { ...baseTooltip(rows, colours), yAlign: "top", caretSize: 20, caretPadding: 12 },
+      },
     },
   });
 }
 
-function addCard(parent, title, note, height, wide) {
+// key: "bar" or "point" adds a small "<150 moves" colour key at the top right.
+function addCard(parent, title, note, height, wide, key) {
   const card = el("section", wide ? "chart-card wide" : "chart-card");
-  card.appendChild(el("h2", "", title));
+  const head = el("div", "chart-head");
+  head.appendChild(el("h2", "", title));
+  if (key) {
+    const legend = el("span", "chart-key");
+    legend.append(el("i", key), `<${MIN_MOVES} moves`);
+    head.appendChild(legend);
+  }
+  card.appendChild(head);
   if (note) card.appendChild(el("p", "muted", note));
   const box = el("div", "chart-box");
   box.style.height = `${height}px`;
@@ -279,16 +291,16 @@ function renderCharts() {
 
   const months = data.dimensions.month || [];
   if (months.length) {
-    const canvas = addCard(host, "Monthly trend", "Hover or tap a point for details. A hollow point has fewer than 150 moves.", 260, true);
+    const canvas = addCard(host, "Monthly trend", "Tap a point for details.", 260, true,
+      months.some((b) => b.moves < MIN_MOVES) ? "point" : null);
     charts.push(lineChart(canvas, months, colours));
   }
   for (const [dim, title] of BAR_DIMS) {
     const rows = barRows(dim);
     if (!rows.length) continue;
-    const note = dim === "opening"
-      ? `Families with at least ${MIN_OPENING_GAMES} games, up to ${MAX_OPENINGS}.`
-      : "Lighter bars have fewer than 150 moves.";
-    const canvas = addCard(host, title, note, Math.max(120, rows.length * 36 + 60), false);
+    const note = dim === "opening" ? `Families with at least ${MIN_OPENING_GAMES} games, up to ${MAX_OPENINGS}.` : "";
+    const canvas = addCard(host, title, note, Math.max(120, rows.length * 36 + 60), false,
+      rows.some((b) => b.moves < MIN_MOVES) ? "bar" : null);
     charts.push(barChart(canvas, rows, rows.map((b) => cap(b.key)), colours));
   }
   const types = [...(data.dimensions.mistake_type || [])].sort((a, b) => b.moves - a.moves);
