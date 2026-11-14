@@ -1,0 +1,10 @@
+username = "robbosloth"
+
+# Used from Phase 2 onwards
+analysis_depth = 14
+stockfish_path = "stockfish"
+
+[thresholds]  # centipawn drop from my perspective
+inaccuracy = 50
+mistake = 100
+blunder = 200

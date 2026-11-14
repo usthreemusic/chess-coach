@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chess Coach — Games</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header>
+  <h1>Chess Coach</h1>
+  <nav>
+    <a href="index.html" class="active">Games</a>
+    <a href="review.html">Review</a>
+    <a href="train.html">Train</a>
+    <a href="stats.html">Stats</a>
+  </nav>
+</header>
+<main>
+  <p class="summary" id="summary">Loading games…</p>
+  <div class="filters">
+    <select id="f-class" aria-label="Time control"><option value="">All time controls</option></select>
+    <select id="f-colour" aria-label="Colour">
+      <option value="">Both colours</option><option value="white">White</option><option value="black">Black</option>
+    </select>
+    <select id="f-result" aria-label="Result">
+      <option value="">All results</option><option value="win">Wins</option><option value="loss">Losses</option><option value="draw">Draws</option>
+    </select>
+    <select id="f-order" aria-label="Order">
+      <option value="desc">Newest first</option><option value="asc">Oldest first</option>
+    </select>
+  </div>
+  <div class="table-wrap">
+    <table>
+      <thead><tr>
+        <th>Date</th><th>Type</th><th>Result</th><th>Opponent</th><th>Rating</th><th>Opening</th><th>Mistakes</th><th></th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty" id="empty" hidden>No games match these filters.</div>
+  </div>
+  <button id="more" hidden>Show more</button>
+</main>
+<script src="js/games.js"></script>
+</body>
+</html>
