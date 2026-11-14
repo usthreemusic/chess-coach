@@ -6,6 +6,8 @@ analysis_depth = 14
 stockfish_path = "stockfish"
 # Moves are not labelled once I am this far behind, or still this far ahead after the move
 decided_cp = 600
+# In puzzles, a move this close to the engine's best move is also accepted
+alt_margin_cp = 50
 
 [thresholds]  # centipawn drop from my perspective
 inaccuracy = 50

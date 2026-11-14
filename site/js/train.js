@@ -158,7 +158,7 @@ function showRest(label, className) {
   if (rest) result.append(el("p", "", `Continuation: ${rest}`));
 }
 
-function finish(solved) {
+function finish(solved, altSan) {
   answered = true;
   record(current, solved);
   updateCounts();
@@ -167,7 +167,14 @@ function finish(solved) {
   $("next").focus();
   if (solved) {
     board.set({ movable: { color: undefined } });
-    showRest("Solved! That is the best move.", "solved");
+    if (altSan) {
+      $("result").replaceChildren(
+        el("p", "solved", `Solved! ${altSan} is a good move.`),
+        el("p", "", `The engine's first choice was ${current.best_san}.`)
+      );
+    } else {
+      showRest("Solved! That is the best move.", "solved");
+    }
   } else {
     const rest = current.pv.slice(1).join(" ");
     $("result").replaceChildren(el("p", "failed", `Best was ${current.best_san}${rest ? `, then ${rest}` : ""}.`));
@@ -181,11 +188,15 @@ function finish(solved) {
 function onMove(orig, dest) {
   if (answered) return;
   const chess = new Chess(current.fen);
-  const wantsBest = orig + dest === current.best_uci.slice(0, 4);
-  const promotion = wantsBest ? current.best_uci[4] : "q"; // auto-promote to queen unless best promotes otherwise
+  const alts = current.alts || [];
+  // Auto-promote to queen unless an accepted answer on these squares promotes otherwise.
+  const accepted = [current.best_uci, ...alts].find((u) => u.slice(0, 4) === orig + dest);
   const move = chess.moves({ verbose: true }).find((m) => m.from === orig && m.to === dest);
-  const uci = orig + dest + (move && move.promotion ? promotion || "q" : "");
-  finish(uci === current.best_uci);
+  const uci = orig + dest + (move && move.promotion ? (accepted && accepted[4]) || "q" : "");
+  if (uci === current.best_uci) return finish(true);
+  const alt = alts.indexOf(uci);
+  if (alt !== -1) return finish(true, current.alts_san[alt]);
+  finish(false);
 }
 
 function showPuzzle(puzzle) {

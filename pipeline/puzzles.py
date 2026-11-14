@@ -33,6 +33,8 @@ def build_puzzles(game, analysis):
                 "best_uci": move["best_uci"],
                 "best_san": move["best"],
                 "pv": move["pv"],
+                "alts": move.get("alts", []),
+                "alts_san": move.get("alts_san", []),
                 "played_san": move["san"],
                 "class": move["class"],
                 "drop": move["drop"],

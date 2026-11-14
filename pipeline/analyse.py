@@ -24,6 +24,7 @@ import fetch
 
 ANALYSIS = fetch.DATA / "analysis"
 CAP = 1000  # centipawn cap; mate scores are stored as +/-CAP
+ALTS_VERSION = 1  # bump to recompute alternative answers for every game
 
 _engine = None
 _config = None
@@ -112,6 +113,34 @@ def analyse_game(game, engine, config):
     return out
 
 
+def add_alternatives(game, analysis, engine, config):
+    """Record other good answers for each of my mistakes and blunders.
+
+    The position before the move is searched for several lines; any move
+    scoring within alt_margin_cp of the top line is stored in "alts", so the
+    trainer can accept it as well as the single best move.
+    """
+    margin = config["alt_margin_cp"]
+    my_colour = chess.WHITE if game["colour"] == "white" else chess.BLACK
+    board = chess.Board()
+    for move in analysis["moves"]:
+        if board.turn == my_colour and move.get("class") in ("mistake", "blunder") and move.get("best_uci"):
+            infos = engine.analyse(board, chess.engine.Limit(depth=config["analysis_depth"]), multipv=4)
+            scored = []
+            for info in infos:
+                if info.get("pv"):
+                    cp = info["score"].pov(board.turn).score(mate_score=100000)
+                    scored.append((info["pv"][0], max(-CAP, min(CAP, cp))))
+            top = max((cp for _, cp in scored), default=0)
+            alts = [m for m, cp in scored if cp >= top - margin and m.uci() not in (move["best_uci"], move["uci"])]
+            if alts:
+                move["alts"] = [m.uci() for m in alts]
+                move["alts_san"] = [board.san(m) for m in alts]
+        board.push_uci(move["uci"])
+    analysis["alts"] = ALTS_VERSION
+    return analysis
+
+
 def _start_engine():
     global _engine
     path = shutil.which(_config["stockfish_path"]) or "/usr/games/stockfish"
@@ -126,23 +155,36 @@ def _init(config):
 
 
 def _work(game):
+    path = ANALYSIS / f"{game['id']}.json"
     try:
-        result = analyse_game(game, _engine, _config)
+        # An existing file only needs its alternative answers added.
+        result = json.loads(path.read_text()) if path.exists() else analyse_game(game, _engine, _config)
+        if result.get("alts") != ALTS_VERSION:
+            add_alternatives(game, result, _engine, _config)
     except chess.engine.EngineTerminatedError as err:
         _start_engine()  # a dead engine must not fail every later game on this worker
         return game["id"], f"engine died: {err}"
     except Exception as err:  # one bad PGN must not stop the batch
         return game["id"], f"{type(err).__name__}: {err}"
-    path = ANALYSIS / f"{game['id']}.json"
     path.write_text(json.dumps(result, separators=(",", ":")))
     return game["id"], None
+
+
+def is_done(game):
+    path = ANALYSIS / f"{game['id']}.json"
+    if not path.exists():
+        return False
+    try:
+        return json.loads(path.read_text()).get("alts") == ALTS_VERSION
+    except ValueError:
+        return False
 
 
 def pending_games():
     games = []
     for path in sorted(fetch.ARCHIVES.glob("*.json")):
         games.extend(json.loads(path.read_text())["games"])
-    games = [g for g in games if not (ANALYSIS / f"{g['id']}.json").exists()]
+    games = [g for g in games if not is_done(g)]
     games.sort(key=lambda g: g["end_time"], reverse=True)  # newest first
     return games
 

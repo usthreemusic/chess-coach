@@ -1,0 +1,35 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "radial-halo",
+        "value": "*",
+        "files": [
+          "site/train.html"
+        ],
+        "createdAt": "2026-11-14T09:22:21.396Z",
+        "reason": "agent triage: the radial gradients are the vendored chessground move-destination dots and check marker on the board, functional chess UI, not a decorative glow"
+      },
+      {
+        "rule": "radial-halo",
+        "value": "*",
+        "files": [
+          "site/review.html"
+        ],
+        "createdAt": "2026-11-14T09:22:21.414Z",
+        "reason": "agent triage: the radial gradients are the vendored chessground move-destination dots and check marker on the board, functional chess UI, not a decorative glow"
+      },
+      {
+        "rule": "border-accent-on-rounded",
+        "value": "*",
+        "files": [
+          "site/css/themes.css"
+        ],
+        "createdAt": "2026-11-14T09:22:21.434Z",
+        "reason": "agent triage: line 95 is the bottom rule of a square-cornered window title bar (border-radius 0) in the retro Pastel theme, part of the user-approved mockup look"
+      }
+    ]
+  }
+}
