@@ -10,17 +10,17 @@ export { phaseOf };
 export const KEPT = ["mistake", "blunder"];
 export const TAGS = ["missed_mate", "missed_capture", "missed_fork", "hung_piece", "back_rank", "endgame"];
 export const OTHER = "other";
-const POINTS = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+export const POINTS = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
 
 /** Points of the piece that the move captures, or 0 if it is not a capture. */
-function capturedValue(board, uci) {
+export function capturedValue(board, uci) {
   const m = legalMove(board, uci);
   if (!m || !(m.isCapture() || m.isEnPassant())) return 0;
   return m.isEnPassant() ? 1 : POINTS[m.captured];
 }
 
 /** True if the move captures a piece worth more than the capturer, or one that cannot be recaptured. */
-function winsMaterial(board, uci) {
+export function winsMaterial(board, uci) {
   const m = legalMove(board, uci);
   if (!m || !(m.isCapture() || m.isEnPassant())) return false;
   const victim = m.isEnPassant() ? 1 : POINTS[m.captured];
@@ -32,7 +32,7 @@ function winsMaterial(board, uci) {
 }
 
 /** True if, after the move, the moved piece attacks two or more enemy non-pawns that are the king, undefended, or worth more. */
-function forks(board, uci) {
+export function forks(board, uci) {
   const after = clone(board);
   playUci(after, uci);
   const to = uci.slice(2, 4);

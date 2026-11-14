@@ -16,6 +16,7 @@ const { tagMistake } = await core("themes.js");
 const { buildPuzzles } = await core("puzzles.js");
 const { buildStats } = await core("stats.js");
 const { ratingBand, pickThemed } = await core("themed.js");
+const { explainLine } = await core("explain.js");
 
 // ---- tiny harness ---------------------------------------------------------------------------
 const tests = [];
@@ -379,6 +380,42 @@ test("pickThemed: proportions, minimum share, availability, interleaving", () =>
   eq(pickThemed({}, {}, 10), []);
   // tag filled in when the pool entries lack it
   eq(pickThemed({ endgame: [{ id: "x" }] }, {}, 1), [{ id: "x", tag: "endgame" }]);
+});
+
+// ---- explainLine: plain-English "why is it best?" ---------------------------------------------
+const FREE_KNIGHT = "4k3/8/8/3n4/8/8/8/3RK3 w - - 0 1";
+const LADDER = "7k/8/8/8/8/8/1R6/R5K1 w - - 0 1";
+test("explain: mate in one", () => {
+  eq(explainLine("6k1/5ppp/8/8/8/8/5PPP/R5K1 w - - 0 1", ["Ra8#"]), ["Ra8# is checkmate."]);
+});
+test("explain: forced mate in two on the back rank", () => {
+  eq(explainLine(LADDER, ["Ra7", "Kg8", "Rb8#"]),
+    ["Ra7 starts a forced checkmate in 2 moves, because the enemy king is trapped on its back rank."]);
+});
+test("explain: free capture and capture of a more valuable piece", () => {
+  eq(explainLine(FREE_KNIGHT, ["Rxd5"]), ["Rxd5 wins a knight for free."]);
+  eq(explainLine("4k3/8/8/4b3/8/2r5/1P6/4K3 w - - 0 1", ["bxc3"]), ["bxc3 wins the rook for your pawn."]);
+});
+test("explain: fork with check, even trade, castling, moving an attacked piece", () => {
+  eq(explainLine("r3k3/8/8/3N4/8/8/8/4K3 w - - 0 1", ["Nc7+"]), ["Nc7+ forks the king and rook."]);
+  eq(explainLine("6k1/1p6/2n5/8/8/5B2/8/6K1 w - - 0 1", ["Bxc6"]), ["Bxc6 trades your bishop for the knight."]);
+  eq(explainLine("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1", ["O-O"]),
+    ["O-O gets your king to safety and brings the rook into play."]);
+  eq(explainLine("4k3/8/8/3p4/4N3/8/8/4K3 w - - 0 1", ["Nc3"]), ["Nc3 moves your knight away from the attack."]);
+});
+test("explain: sentence about the move actually played", () => {
+  const at = (info) => explainLine(FREE_KNIGHT, ["Rxd5"], info)[1];
+  eq(at({ playedSan: "Kd2", tags: ["hung_piece"] }), "Your move Kd2 left a piece where it could be taken.");
+  eq(at({ playedSan: "Kd2", tags: ["missed_mate"], drop: 5000 }), "Your move Kd2 let a forced checkmate slip.");
+  eq(at({ playedSan: "Kd2", tags: ["other"], drop: 460 }), "Your move Kd2 gave up about 4.6 pawns' worth of advantage.");
+  eq(at({ playedSan: "Kd2", tags: ["other"], drop: 1200 }), "Your move Kd2 threw away a winning advantage.");
+  eq(explainLine(FREE_KNIGHT, ["Rxd5"], { tags: ["hung_piece"] }).length, 1);
+});
+test("explain: empty or illegal lines never throw", () => {
+  const none = ["No explanation is available for this position."];
+  eq(explainLine(LADDER, []), none);
+  eq(explainLine(LADDER, ["Qh9"]), none);
+  eq(explainLine(LADDER, ["Ra7", "Qh9"]).length, 1);
 });
 
 // ---- run ------------------------------------------------------------------------------------

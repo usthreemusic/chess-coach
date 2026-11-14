@@ -147,6 +147,7 @@
   background-image: conic-gradient(#fff3c4 25%, #ffb21a 0 50%, #fff3c4 0 75%, #ffb21a 0);
   background-size: 25% 25%;
 }
+:root[data-theme="pastel"] .cg-wrap { --coord: #2a1a5e; }
 :root[data-theme="pastel"] cg-board square.last-move { background-color: rgba(242, 92, 162, 0.5); }
 :root[data-theme="pastel"] cg-board square.selected { background-color: rgba(62, 203, 240, 0.7); }
 
@@ -256,6 +257,7 @@
   background-image: conic-gradient(#fff 25%, #808080 0 50%, #fff 0 75%, #808080 0);
   background-size: 25% 25%;
 }
+:root[data-theme="win95"] .cg-wrap { --coord: #000; }
 :root[data-theme="win95"] cg-board square.last-move { background-color: rgba(255, 230, 0, 0.55); }
 :root[data-theme="win95"] cg-board square.selected { background-color: rgba(0, 0, 128, 0.5); }
 
@@ -351,6 +353,7 @@
   background-image: conic-gradient(#aaaaaa 25%, #00aaaa 0 50%, #aaaaaa 0 75%, #00aaaa 0);
   background-size: 25% 25%;
 }
+:root[data-theme="dos"] .cg-wrap { --coord: #000; }
 :root[data-theme="dos"] cg-board square.last-move { background-color: rgba(255, 255, 85, 0.6); }
 :root[data-theme="dos"] cg-board square.selected { background-color: rgba(0, 0, 170, 0.6); }
 :root[data-theme="dos"] cg-board square.move-dest { background: radial-gradient(rgba(0, 0, 0, 0.55) 22%, rgba(0, 0, 0, 0) 0); }

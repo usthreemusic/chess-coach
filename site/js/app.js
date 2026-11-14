@@ -1,6 +1,7 @@
 // Shared app shell: username gate, player chip, sync status strip and refresh helper.
 // Page scripts do `const user = await ready;` and simply never start while the gate is showing.
-import { currentUser, setUser, clearUser, onDataChanged } from "./core/data.js";
+import { currentUser, setUser, clearUser, onDataChanged, monthsBack, setMonthsBack } from "./core/data.js";
+import { CONFIG, MONTH_CHOICES } from "./core/config.js";
 import { startSync } from "./core/sync.js";
 
 const USERNAME_RE = /^[a-z0-9_-]{3,25}$/;
@@ -73,7 +74,13 @@ function showGate() {
   const error = el("p", "welcome-error");
   error.setAttribute("role", "alert");
   error.hidden = true;
-  form.append(label, row, error);
+  const monthsLabel = el("label", "", "How far back to look");
+  monthsLabel.htmlFor = "months-input";
+  const months = el("select");
+  months.id = "months-input";
+  for (const n of MONTH_CHOICES) months.append(new Option(`Last ${n} months${n === CONFIG.monthsBack ? " (quickest)" : ""}`, n));
+  months.value = String(CONFIG.monthsBack);
+  form.append(label, row, monthsLabel, months, error);
   form.addEventListener("submit", (ev) => {
     ev.preventDefault();
     const name = input.value.trim().toLowerCase();
@@ -81,6 +88,7 @@ function showGate() {
     if (!USERNAME_RE.test(name)) return fail("Usernames are 3 to 25 characters: letters, digits, _ and -.");
     setUser(name);
     if (currentUser() !== name) return fail("Your browser is blocking site storage, so Chess Coach cannot remember you. Allow storage for this site and try again.");
+    setMonthsBack(Number(months.value));
     location.reload();
   });
   panel.append(form);
@@ -96,6 +104,16 @@ function addChip(user) {
   if (!header) return;
   const chip = el("div", "player-chip");
   chip.append(el("span", "player-name", "Player: " + user));
+  // How far back to look. Changing it reloads: a longer window fetches and analyses the extra months.
+  const months = el("select", "months-picker");
+  months.setAttribute("aria-label", "How far back to look");
+  for (const n of MONTH_CHOICES) months.append(new Option(`Last ${n} months`, n));
+  months.value = String(monthsBack());
+  months.addEventListener("change", () => {
+    setMonthsBack(Number(months.value));
+    location.reload();
+  });
+  chip.append(months);
   const btn = el("button", "", "Switch player");
   btn.type = "button";
   btn.addEventListener("click", switchPlayer);

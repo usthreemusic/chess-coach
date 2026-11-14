@@ -2,6 +2,8 @@ import { Chessground } from "../vendor/chessground.min.js";
 import { Chess } from "../vendor/chess.js";
 import { ready, onRefresh } from "./app.js";
 import { loadPuzzles, loadThemed } from "./core/data.js";
+import { phaseOf } from "./core/chessutil.js";
+import { explainLine } from "./core/explain.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -32,7 +34,10 @@ const DAY = 86400000;
 const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21]; // indexed by box, 1-5
 const LEARNED_BOX = 4;
 
-const THEMED_DELAY = 500; // ms before the opponent's reply is played in themed puzzles
+const REPLY_DELAY = 600; // ms before the opponent's reply is played
+const LINE_DELAY = 1100; // ms between moves when the best line is played back
+const PIECE_NAMES = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
+const PHASE_LABELS = { opening: "Opening (moves 1–11)", middlegame: "Middlegame", endgame: "Endgame" };
 const TAG_LABELS = {
   missed_mate: "Missed mate",
   missed_capture: "Missed capture",
@@ -47,12 +52,16 @@ const tagLabel = (tag) => TAG_LABELS[tag] || tag;
 let puzzles = []; // every puzzle from my games
 let themed = null; // Lichess puzzles, or null when the themed pool could not be loaded
 let pool = []; // puzzles matching the filters
-let filters = { mode: "games", opening: "all", colour: "both", tag: "all", weakness: "all" };
+let filters = { mode: "games", opening: "all", colour: "both", tag: "all", phase: "all", weakness: "all" };
 let state = {};
 let board, current, answered;
+const phases = new Map(); // puzzle id -> opening, middlegame or endgame
 let wantedTag = null; // ?tag= from the URL, applied once puzzles with that tag exist
-// Themed puzzles: the live position, the index of the next solution move, the last move shown
-let chess, step, lastMove, playToken = 0;
+// The puzzle on the board: the live position, the moves to find (UCI), the whole best line (UCI),
+// the index of the next move in `line`, the last move shown and the one shown at the start
+let chess, line = [], fullLine = [], step, lastMove, startMove, playToken = 0;
+// scored: this puzzle's result is already recorded. hinted: a hint was used. outcome: up, same or down
+let scored, hinted, outcome;
 
 const isThemed = () => filters.mode === "themed";
 
@@ -100,7 +109,8 @@ function applyFilters() {
     (p) =>
       (filters.opening === "all" || p.opening_family === filters.opening) &&
       (filters.colour === "both" || p.colour === filters.colour) &&
-      (filters.tag === "all" || (p.tags || []).includes(filters.tag))
+      (filters.tag === "all" || (p.tags || []).includes(filters.tag)) &&
+      (filters.phase === "all" || p.phase === filters.phase)
   );
 }
 
@@ -129,6 +139,19 @@ function buildTagOptions() {
   select.value = filters.tag;
 }
 
+// Game phase options (opening, middlegame, endgame), with counts.
+function buildPhaseOptions() {
+  const counts = new Map();
+  for (const p of puzzles) counts.set(p.phase, (counts.get(p.phase) || 0) + 1);
+  const select = $("filter-phase");
+  select.replaceChildren(new Option("All game phases", "all"));
+  for (const phase of Object.keys(PHASE_LABELS)) {
+    if (counts.has(phase)) select.append(new Option(`${PHASE_LABELS[phase]} (${counts.get(phase)})`, phase));
+  }
+  if (!counts.has(filters.phase)) filters.phase = "all";
+  select.value = filters.phase;
+}
+
 // Weakness options: tags that have themed puzzles, most frequent mistake first.
 function buildWeaknessOptions() {
   const mine = new Map();
@@ -150,12 +173,14 @@ function syncFilterControls() {
   $("filter-opening").hidden = isThemed();
   $("filter-colour").hidden = isThemed();
   $("filter-tag").hidden = isThemed();
+  $("filter-phase").hidden = isThemed();
   $("filter-weakness").hidden = !isThemed();
 }
 
-function record(puzzle, solved) {
+// result: "up" (solved first try), "same" (solved with a hint) or "down" (a wrong move, or the answer shown)
+function record(puzzle, result) {
   const box = state[puzzle.key]?.box ?? 1;
-  const next = solved ? Math.min(5, box + 1) : 1;
+  const next = result === "up" ? Math.min(5, box + 1) : result === "same" ? box : 1;
   state[puzzle.key] = { box: next, due: Date.now() + INTERVAL_DAYS[next] * DAY };
   saveState();
 }
@@ -210,74 +235,47 @@ function formatDate(ms) {
 
 function updateCounts() {
   $("counts").textContent =
-    `${dueList().length} due now · ${unseenList().length} unseen · ${learnedCount()} learned (of ${pool.length})`;
+    `${dueList().length} to review · ${unseenList().length} new · ${learnedCount()} learned · ${pool.length} puzzles in this selection`;
 }
 
 // Legal moves from chess.js in the shape chessground wants: Map(from -> [to, ...]).
-function destsFor(chess) {
+function destsFor(position) {
   const dests = new Map();
-  for (const m of chess.moves({ verbose: true })) {
+  for (const m of position.moves({ verbose: true })) {
     if (!dests.has(m.from)) dests.set(m.from, []);
     dests.get(m.from).push(m.to);
   }
   return dests;
 }
 
-function setMovable(enabled, position = new Chess(current.fen)) {
-  const colour = position.turn() === "w" ? "white" : "black";
+const sq = (uci) => [uci.slice(0, 2), uci.slice(2, 4)];
+const colourOf = (position) => (position.turn() === "w" ? "white" : "black");
+const play = (position, uci) => position.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+const say = (...nodes) => $("result").replaceChildren(...nodes);
+// A correct move is highlighted in green; anything else keeps the theme's last-move colour.
+const setGood = (on) => $("board").classList.toggle("good-move", on);
+// Only these moves affect the Leitner box: every move of a themed puzzle, the first move of one from my games.
+const scores = () => isThemed() || step === 0;
+
+// Put the live position on the board; `enabled` lets the player move.
+function setMovable(enabled) {
+  const colour = colourOf(chess);
   board.set({
-    fen: position.fen(),
+    fen: chess.fen(),
     turnColor: colour,
-    movable: { free: false, color: enabled ? colour : undefined, dests: enabled ? destsFor(position) : new Map() },
+    lastMove,
+    check: chess.isCheck(),
+    movable: { free: false, color: enabled ? colour : undefined, dests: enabled ? destsFor(chess) : new Map() },
   });
 }
 
-function showRest(label, className) {
-  const rest = current.pv.slice(1).join(" ");
-  const result = $("result");
-  result.replaceChildren(el("p", className, label));
-  if (rest) result.append(el("p", "", `Continuation: ${rest}`));
-}
-
-function finish(solved, altSan) {
-  answered = true;
-  playToken++; // cancel a pending opponent reply
-  record(current, solved);
-  updateCounts();
-  $("show-answer").hidden = true;
-  $("next").hidden = false;
-  $("next").focus();
-  $("show-answer").disabled = false;
-  if (isThemed()) return finishThemed(solved);
-  if (solved) {
-    board.set({ movable: { color: undefined } });
-    if (altSan) {
-      $("result").replaceChildren(
-        el("p", "solved", `Solved! ${altSan} is a good move.`),
-        el("p", "", `The engine's first choice was ${current.best_san}.`)
-      );
-    } else {
-      showRest("Solved! That is the best move.", "solved");
-    }
-  } else {
-    const rest = current.pv.slice(1).join(" ");
-    $("result").replaceChildren(el("p", "failed", `Best was ${current.best_san}${rest ? `, then ${rest}` : ""}.`));
-    setMovable(false); // snap back to the puzzle position
-    board.setAutoShapes([
-      { orig: current.best_uci.slice(0, 2), dest: current.best_uci.slice(2, 4), brush: "green" },
-    ]);
-  }
-}
-
-const sq = (uci) => [uci.slice(0, 2), uci.slice(2, 4)];
-
-// SAN for a line of UCI moves played from the live position (stops at an illegal one).
-function sanLine(ucis) {
-  const c = new Chess(chess.fen());
+// SAN for a line of UCI moves played from a position (stops at an illegal one).
+function sanFrom(position, ucis) {
+  const c = new Chess(position.fen());
   const out = [];
   for (const uci of ucis) {
     try {
-      out.push(c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }).san);
+      out.push(play(c, uci).san);
     } catch (err) {
       break;
     }
@@ -285,114 +283,245 @@ function sanLine(ucis) {
   return out;
 }
 
-function finishThemed(solved) {
-  if (solved) {
-    board.set({ movable: { color: undefined } });
-    $("result").replaceChildren(el("p", "solved", "Solved!"));
-    return;
-  }
-  const line = sanLine(current.solution.slice(step));
-  const rest = line.slice(1).join(" ");
-  $("result").replaceChildren(el("p", "failed", `Best was ${line[0] || "?"}${rest ? `, then ${rest}` : ""}.`));
-  setMovable(false, chess); // snap back to the position before the wrong move
-  board.set({ lastMove });
-  board.setAutoShapes([{ orig: sq(current.solution[step])[0], dest: sq(current.solution[step])[1], brush: "green" }]);
-}
-
-function onThemedMove(orig, dest) {
-  const expected = current.solution[step];
-  const move = chess.moves({ verbose: true }).find((m) => m.from === orig && m.to === dest);
-  if (!move) return finish(false);
-  // Promote to the solution's piece when the squares match, else to a queen.
-  const promotion = move.promotion ? (expected.slice(0, 4) === orig + dest && expected[4]) || "q" : undefined;
-  let ok = orig + dest + (promotion || "") === expected;
-  if (!ok) {
-    // Any checkmate is as good as an expected checkmate.
-    const wanted = new Chess(chess.fen());
-    wanted.move({ from: sq(expected)[0], to: sq(expected)[1], promotion: expected[4] });
-    if (wanted.isCheckmate()) {
-      const mine = new Chess(chess.fen());
-      mine.move({ from: orig, to: dest, promotion });
-      ok = mine.isCheckmate();
+// UCI for a line of SAN moves played from a FEN (stops at an illegal one).
+function uciFrom(fen, sans) {
+  const c = new Chess(fen);
+  const out = [];
+  for (const san of sans || []) {
+    try {
+      const m = c.move(san);
+      out.push(m.from + m.to + (m.promotion || ""));
+    } catch (err) {
+      break;
     }
   }
-  if (!ok) return finish(false);
-  chess.move({ from: orig, to: dest, promotion });
-  step++;
-  lastMove = [orig, dest];
-  board.set({ fen: chess.fen(), lastMove });
-  if (step >= current.solution.length || chess.isGameOver()) return finish(true);
-  setMovable(false, chess);
-  $("show-answer").disabled = true;
-  const token = ++playToken;
-  setTimeout(() => {
-    if (token !== playToken || answered) return;
-    const reply = current.solution[step];
-    chess.move({ from: sq(reply)[0], to: sq(reply)[1], promotion: reply[4] });
-    step++;
-    lastMove = sq(reply);
-    board.set({ lastMove });
-    $("show-answer").disabled = false;
-    if (step >= current.solution.length) return finish(true);
-    setMovable(true, chess);
-    board.set({ lastMove });
-  }, THEMED_DELAY);
+  return out;
+}
+
+// fullLine is the whole best line; line is the part the player is asked to play.
+// From my games the player carries on past the first move only when the follow-up is forcing
+// (a capture, check or mate), because a quiet follow-up has too many equally good answers.
+function buildLines(puzzle) {
+  if (isThemed()) {
+    fullLine = puzzle.solution;
+    line = fullLine;
+    return;
+  }
+  fullLine = uciFrom(puzzle.fen, puzzle.pv);
+  if (fullLine[0] !== puzzle.best_uci) fullLine = [puzzle.best_uci];
+  const forcing = fullLine.length >= 3 && /[x+#]/.test(puzzle.pv[2]);
+  line = forcing ? fullLine.slice(0, 3) : fullLine.slice(0, 1);
+}
+
+function score(result) {
+  if (scored) return;
+  scored = true;
+  outcome = result;
+  record(current, result);
+  updateCounts();
+}
+
+function scoreNote() {
+  if (outcome === "up") {
+    const days = INTERVAL_DAYS[state[current.key].box];
+    return `First try. This puzzle comes back in ${days} day${days === 1 ? "" : "s"}.`;
+  }
+  if (outcome === "same") return "You used a hint, so this puzzle stays at the same level and comes back again.";
+  return "This puzzle goes back to the start and comes round again soon.";
+}
+
+function finish(solved, altSan) {
+  answered = true;
+  playToken++; // cancel a pending opponent reply
+  score(!solved ? "down" : hinted ? "same" : "up");
+  for (const id of ["show-answer", "hint"]) {
+    $(id).hidden = true;
+    $(id).disabled = false;
+  }
+  $("play-line").hidden = false;
+  $("play-line").textContent = "Play the best line";
+  $("explain").hidden = false;
+  $("next").hidden = false;
+  $("next").focus();
+  board.setAutoShapes([]);
+  const rest = sanFrom(chess, fullLine.slice(step));
+  if (solved) {
+    board.set({ movable: { color: undefined } });
+    if (altSan) {
+      say(
+        el("p", "solved", `Solved! ${altSan} is a good move.`),
+        el("p", "", `The engine's first choice was ${current.best_san}.`)
+      );
+    } else {
+      say(el("p", "solved", isThemed() ? "Solved!" : step > 1 ? "Solved! You found the whole line." : "Solved! That is the best move."));
+      if (rest.length) $("result").append(el("p", "", `Continuation: ${rest.join(" ")}`));
+    }
+  } else {
+    say(el("p", "failed", `Best was ${rest[0] || "?"}${rest.length > 1 ? `, then ${rest.slice(1).join(" ")}` : ""}.`));
+    setGood(false);
+    setMovable(false); // snap back to the position before the wrong move
+    if (line[step]) board.setAutoShapes([{ orig: sq(line[step])[0], dest: sq(line[step])[1], brush: "green" }]);
+  }
+  $("result").append(el("p", "muted", scoreNote()));
+}
+
+// A wrong move: say so, put the piece back and let the player try again.
+function wrong(san) {
+  if (scores()) score("down");
+  setMovable(true);
+  const text = !san
+    ? "That move is not legal. Try again."
+    : !isThemed() && step === 0 && san === current.played_san
+      ? `${san} is the move you played in the game. Try something else.`
+      : `${san} is not the move. Try again.`;
+  say(el("p", "failed", text), el("p", "muted", "Stuck? Ask for a hint, or show the answer."));
+}
+
+function showHint() {
+  if (!current || answered || !line[step]) return;
+  if (scores()) hinted = true;
+  const from = sq(line[step])[0];
+  board.setAutoShapes([{ orig: from, brush: "green" }]);
+  say(el("p", "", `Hint: move your ${PIECE_NAMES[chess.get(from).type]} on ${from}.`));
 }
 
 function onMove(orig, dest) {
-  if (answered) return;
-  if (isThemed()) return onThemedMove(orig, dest);
-  const chess = new Chess(current.fen);
-  const alts = current.alts || [];
-  // Auto-promote to queen unless an accepted answer on these squares promotes otherwise.
-  const accepted = [current.best_uci, ...alts].find((u) => u.slice(0, 4) === orig + dest);
+  if (!current || answered) return;
+  const expected = line[step];
   const move = chess.moves({ verbose: true }).find((m) => m.from === orig && m.to === dest);
-  const uci = orig + dest + (move && move.promotion ? (accepted && accepted[4]) || "q" : "");
-  if (uci === current.best_uci) return finish(true);
+  if (!move) return wrong(null);
+  // Other good first moves (within 50 cp of the best) are accepted in puzzles from my games.
+  const alts = !isThemed() && step === 0 ? current.alts || [] : [];
+  // Promote to an accepted answer's piece when the squares match, else to a queen.
+  const match = [expected, ...alts].find((u) => u.slice(0, 4) === orig + dest);
+  const promotion = move.promotion ? (match && match[4]) || "q" : undefined;
+  const uci = orig + dest + (promotion || "");
+  const after = new Chess(chess.fen());
+  const san = play(after, uci).san;
   const alt = alts.indexOf(uci);
-  if (alt !== -1) return finish(true, current.alts_san[alt]);
-  finish(false);
+  // Any checkmate is as good as the expected move.
+  if (uci !== expected && alt === -1 && !after.isCheckmate()) return wrong(san);
+
+  chess = after;
+  step++;
+  lastMove = [orig, dest];
+  setGood(true);
+  board.setAutoShapes([]);
+  setMovable(false);
+  if (uci !== expected) return finish(true, alt !== -1 ? current.alts_san[alt] : null);
+  if (step >= line.length || chess.isGameOver()) return finish(true);
+
+  // The opponent's reply, then the player carries on.
+  say(el("p", "solved", `${san} is right.`));
+  $("show-answer").disabled = true;
+  $("hint").disabled = true;
+  const token = ++playToken;
+  setTimeout(() => {
+    if (token !== playToken || answered) return;
+    const reply = line[step];
+    const replySan = play(chess, reply).san;
+    step++;
+    lastMove = sq(reply);
+    setGood(false);
+    $("show-answer").disabled = false;
+    $("hint").disabled = false;
+    if (step >= line.length || chess.isGameOver()) {
+      setMovable(false);
+      return finish(true);
+    }
+    setMovable(true);
+    say(el("p", "solved", `${san} is right.`), el("p", "", `Your opponent answers ${replySan}. Find the follow-up.`));
+  }, REPLY_DELAY);
 }
 
-function showThemed(puzzle) {
-  chess = new Chess(puzzle.fen);
-  step = 0;
-  lastMove = sq(puzzle.last_uci);
-  const colour = chess.turn() === "w" ? "white" : "black";
-  board.set({ orientation: colour, lastMove });
+// Play the whole best line on the board from the puzzle position, one move at a time.
+function playLine() {
+  if (!current || !answered) return;
+  const token = ++playToken;
+  const position = new Chess(current.fen);
+  const sans = sanFrom(position, fullLine);
+  const caption = el("p", "line-caption");
+  say(el("p", "", "Best line:"), caption);
   board.setAutoShapes([]);
-  setMovable(true, chess);
-  board.set({ lastMove });
-  $("prompt").textContent = `Themed puzzle: ${tagLabel(puzzle.tag)}. Find the best move.`;
-  $("puzzle-meta").textContent = `Rating ${puzzle.rating} · you are ${colour}`;
-  $("credit-link").href = `https://lichess.org/training/${encodeURIComponent(puzzle.id)}`;
+  setGood(false);
+  board.set({
+    fen: position.fen(),
+    turnColor: colourOf(position),
+    lastMove: startMove,
+    check: position.isCheck(),
+    movable: { color: undefined, dests: new Map() },
+  });
+  $("play-line").textContent = "Replay the best line";
+  const me = position.turn();
+  let i = 0;
+  const tick = () => {
+    if (token !== playToken || i >= sans.length) return;
+    const mine = position.turn() === me;
+    const move = position.move(sans[i]);
+    setGood(mine);
+    board.set({ fen: position.fen(), turnColor: colourOf(position), lastMove: [move.from, move.to], check: position.isCheck() });
+    const span = el("span", mine ? "mine" : "", sans[i]);
+    caption.append(i ? " " : "", span);
+    i++;
+    setTimeout(tick, LINE_DELAY);
+  };
+  setTimeout(tick, LINE_DELAY / 2);
+}
+
+function showWhy() {
+  if (!current || !answered) return;
+  const sans = sanFrom(new Chess(current.fen), fullLine);
+  const info = isThemed() ? {} : { playedSan: current.played_san, drop: current.drop, tags: current.tags || [] };
+  let sentences;
+  try {
+    sentences = explainLine(current.fen, sans, info);
+  } catch (err) {
+    sentences = ["No explanation is available for this position."];
+  }
+  $("why").replaceChildren(el("h3", "", `Why ${sans[0] || "this move"}?`), ...sentences.map((s) => el("p", "", s)));
+  $("why").hidden = false;
+  $("explain").hidden = true;
 }
 
 function showPuzzle(puzzle) {
   current = puzzle;
   answered = false;
+  scored = false;
+  hinted = false;
+  outcome = null;
   playToken++;
+  chess = new Chess(puzzle.fen);
+  step = 0;
+  buildLines(puzzle);
+  startMove = isThemed() && puzzle.last_uci ? sq(puzzle.last_uci) : undefined;
+  lastMove = startMove;
+  const colour = colourOf(chess);
+
   $("review-line").hidden = isThemed();
   $("credit").hidden = !isThemed();
-  $("show-answer").disabled = false;
-  $("result").replaceChildren();
-  $("show-answer").hidden = false;
-  $("next").hidden = true;
-  if (isThemed()) {
-    showThemed(puzzle);
-    updateCounts();
-    return;
+  say();
+  $("why").hidden = true;
+  for (const id of ["show-answer", "hint"]) {
+    $(id).hidden = false;
+    $(id).disabled = false;
   }
-  const chess = new Chess(puzzle.fen);
-  const colour = chess.turn() === "w" ? "white" : "black";
-  board.set({ orientation: colour, lastMove: undefined });
+  for (const id of ["next", "play-line", "explain"]) $(id).hidden = true;
+
+  setGood(false);
+  board.set({ orientation: colour });
   board.setAutoShapes([]);
   setMovable(true);
 
-  $("prompt").textContent = `You played ${puzzle.played_san} here (${puzzle.class}). Find a better move.`;
-  $("puzzle-meta").textContent =
-    `${formatDate(puzzle.end_time * 1000)} · ${puzzle.time_class} · ${puzzle.opening_family} · ${puzzle.opening || "Unknown opening"} · you are ${colour}`;
-  $("review-link").href = `review.html?id=${encodeURIComponent(puzzle.game_id)}&ply=${puzzle.ply}`;
+  if (isThemed()) {
+    $("prompt").textContent = `Themed puzzle: ${tagLabel(puzzle.tag)}. Find the best move.`;
+    $("puzzle-meta").textContent = `Rating ${puzzle.rating} · you are ${colour}`;
+    $("credit-link").href = `https://lichess.org/training/${encodeURIComponent(puzzle.id)}`;
+  } else {
+    $("prompt").textContent = `You played ${puzzle.played_san} here (${puzzle.class}). Find a better move.`;
+    $("puzzle-meta").textContent =
+      `${formatDate(puzzle.end_time * 1000)} · ${puzzle.time_class} · ${puzzle.opening_family} · ${puzzle.opening || "Unknown opening"} · you are ${colour}`;
+    $("review-link").href = `review.html?id=${encodeURIComponent(puzzle.game_id)}&ply=${puzzle.ply}`;
+  }
   updateCounts();
 }
 
@@ -471,7 +600,11 @@ async function importProgress(file) {
 async function refreshData() {
   const [mine, extra] = await Promise.all([loadPuzzles(), loadThemed().catch(() => null)]);
   puzzles = mine.puzzles;
-  for (const p of puzzles) p.key = p.id;
+  for (const p of puzzles) {
+    p.key = p.id;
+    if (!phases.has(p.id)) phases.set(p.id, phaseOf(new Chess(p.fen)));
+    p.phase = phases.get(p.id);
+  }
   themed = extra ? extra.puzzles : null;
   for (const p of themed || []) p.key = `L:${p.id}`; // cannot collide with game puzzle ids
   if (wantedTag && puzzles.some((p) => (p.tags || []).includes(wantedTag))) {
@@ -482,6 +615,7 @@ async function refreshData() {
   }
   buildOpeningOptions();
   buildTagOptions();
+  buildPhaseOptions();
   applyFilters();
   buildWeaknessOptions();
   syncFilterControls();
@@ -505,12 +639,15 @@ async function init() {
   board = Chessground($("board"), {
     coordinates: true,
     drawable: { enabled: false, visible: true },
-    movable: { free: false, showDests: true, events: { after: onMove } },
+    movable: { free: false, showDests: false, events: { after: onMove } },
   });
 
   $("show-answer").onclick = () => {
-    if (!answered) finish(false);
+    if (current && !answered) finish(false);
   };
+  $("hint").onclick = showHint;
+  $("play-line").onclick = playLine;
+  $("explain").onclick = showWhy;
   $("next").onclick = () => advance(current && current.key);
   $("export").onclick = exportProgress;
   $("import").onclick = () => $("import-file").click();
@@ -525,6 +662,7 @@ async function init() {
       opening: $("filter-opening").value,
       colour: $("filter-colour").value,
       tag: $("filter-tag").value,
+      phase: $("filter-phase").value,
       weakness: $("filter-weakness").value,
     };
     saveFilters();
@@ -537,6 +675,7 @@ async function init() {
   $("filter-opening").onchange = onFilter;
   $("filter-colour").onchange = onFilter;
   $("filter-tag").onchange = onFilter;
+  $("filter-phase").onchange = onFilter;
   try {
     await refreshData();
   } catch (err) {

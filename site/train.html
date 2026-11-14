@@ -36,9 +36,17 @@
         <option value="black">Black</option>
       </select>
       <select id="filter-tag" aria-label="Mistake type"></select>
+      <select id="filter-phase" aria-label="Game phase"></select>
       <select id="filter-weakness" aria-label="Weakness" hidden></select>
     </div>
     <p class="summary" id="counts"></p>
+    <details class="counts-help">
+      <summary>What do these numbers mean?</summary>
+      <p><b>To review:</b> puzzles you have tried before that are due to come back today.</p>
+      <p><b>New:</b> puzzles you have not tried yet.</p>
+      <p><b>Learned:</b> puzzles you have solved first try three times in a row. They only come back every 7 days, then every 21 days.</p>
+      <p>Solve a puzzle first try, without a hint, and it comes back after a longer gap each time (1, 3, 7, then 21 days). Get it wrong and it starts again. The numbers count only the puzzles that match the filters above.</p>
+    </details>
     <div class="train-done empty" id="done" hidden></div>
     <div class="review" id="puzzle">
       <div class="train-col">
@@ -49,9 +57,13 @@
         <p class="muted" id="puzzle-meta"></p>
         <div id="result"></div>
         <div class="controls">
+          <button id="hint">Hint</button>
           <button id="show-answer">Show answer</button>
+          <button id="play-line" hidden>Play the best line</button>
+          <button id="explain" hidden>Why is it best?</button>
           <button id="next" hidden>Next puzzle</button>
         </div>
+        <div id="why" hidden></div>
         <p id="review-line"><a id="review-link">Review this game</a></p>
         <p class="muted" id="credit" hidden><a id="credit-link" href="https://lichess.org/training" target="_blank" rel="noopener">Puzzles from the Lichess puzzle database (CC0)</a></p>
       </div>

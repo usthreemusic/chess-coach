@@ -138,6 +138,26 @@ td a { color: var(--accent); }
 #result p { margin: 0 0 4px; }
 #result .solved { color: var(--win); font-weight: 600; }
 #result .failed { color: var(--loss); font-weight: 600; }
+#result .line-caption { font-variant-numeric: tabular-nums; min-height: 1.4em; }
+#result .line-caption .mine { font-weight: 700; }
+#why { margin: 0 0 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }
+#why[hidden], .controls button[hidden], #puzzle[hidden] { display: none; }
+#why h3 { margin: 0 0 4px; font-size: 15px; }
+#why p { margin: 0 0 4px; }
+.counts-help { margin: -8px 0 12px; color: var(--muted); font-size: 14px; }
+.counts-help summary { cursor: pointer; width: fit-content; }
+.counts-help p { margin: 4px 0 0; max-width: 60ch; }
+/* A correct move: green squares instead of the theme's last-move colour. */
+#board.good-move cg-board square.last-move { background-color: rgba(40, 180, 70, 0.62); }
+
+/* Board coordinates: inside the board, in the corner of each edge square, one dark colour that
+   reads on both square colours. Replaces chessground's defaults, which are faint and sit off the squares. */
+.cg-wrap coords { opacity: 1; font: 700 11px/1 Verdana, Geneva, sans-serif; text-transform: none; }
+.cg-wrap coords coord { flex: 1 1 0; transform: none !important; color: var(--coord, #3b2a1a) !important; }
+.cg-wrap coords.ranks { top: 0; left: 0; right: auto; width: auto; height: 100%; align-items: flex-start; }
+.cg-wrap coords.ranks coord { padding: 2px 0 0 3px; }
+.cg-wrap coords.files { bottom: 0; left: 0; width: 100%; height: auto; text-align: right; text-transform: none; }
+.cg-wrap coords.files coord { padding: 0 3px 2px 0; }
 .train-done { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; margin-bottom: 16px; }
 
 /* Stats page */
@@ -231,3 +251,6 @@ input[type="text"] {
 .welcome-row input { flex: 1 1 0; }
 .welcome-error { color: var(--loss); margin: 0 0 8px; }
 .welcome-note { color: var(--muted); font-size: 14px; margin: 14px 0 0; }
+
+.welcome-form select { display: block; margin: 4px 0 10px; }
+.welcome-form label[for="months-input"] { display: block; margin-top: 10px; }

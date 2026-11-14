@@ -3,6 +3,7 @@ import * as store from "./store.js";
 import { buildPuzzles } from "./puzzles.js";
 import { buildStats } from "./stats.js";
 import { ratingBand, pickThemed } from "./themed.js";
+import { monthsBackFor, setMonthsBackFor, windowStart } from "./config.js";
 
 const USER_KEY = "chess-coach-user";
 const CHANNEL = "chess-coach";
@@ -24,6 +25,18 @@ export function clearUser() {
   invalidate();
 }
 
+/** Months of games this player has chosen to look at (3, 6 or 12). */
+export const monthsBack = () => monthsBackFor(currentUser());
+export function setMonthsBack(months) {
+  setMonthsBackFor(currentUser(), months);
+  invalidate();
+}
+// Games older than the chosen window stay in storage but are not shown.
+const inWindow = (user) => {
+  const from = windowStart(monthsBackFor(user));
+  return (g) => g.end_time >= from;
+};
+
 // ---- memoisation, keyed by username, cleared on any change ----
 let cache = new Map();
 function memo(key, fn) {
@@ -44,7 +57,7 @@ export function loadGames() {
   return memo("games", async (user) => {
     if (!user) return { username: null, games: [] };
     const [all, index] = await Promise.all([store.getGames(user), store.getAnalysisIndex(user)]);
-    const games = all.map((g) => {
+    const games = all.filter(inWindow(user)).map((g) => {
       const { pgn, ...rest } = g;
       const entry = { ...rest, month: monthOf(g.end_time) };
       const rec = index.get(g.id);
@@ -67,7 +80,7 @@ function loadPairs() {
     if (!user) return [];
     const [games, analyses] = await Promise.all([store.getGames(user), store.getAnalyses(user)]);
     const pairs = [];
-    for (const game of games) {
+    for (const game of games.filter(inWindow(user))) {
       const analysis = analyses.get(game.id);
       if (analysis) pairs.push({ game, analysis });
     }

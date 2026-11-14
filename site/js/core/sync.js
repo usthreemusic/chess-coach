@@ -1,5 +1,5 @@
 // Fetch a player's games from chess.com, store them, and analyse them in the browser.
-import { CONFIG } from "./config.js";
+import { CONFIG, monthsBackFor, windowStart } from "./config.js";
 import { normaliseGame } from "./normalise.js";
 import { analyseGame } from "./analyse.js";
 import { listArchives, fetchMonth } from "./chesscom.js";
@@ -100,7 +100,7 @@ export function startSync(username, { onProgress } = {}) {
     emit({ phase: "fetch", done: 0, total: 0, message: "Looking up " + user + " on chess.com" });
     const archives = await listArchives(user);
     const stored = await store.getMonths(user);
-    const todo = selectMonths(archives, today, stored);
+    const todo = selectMonths(archives, today, stored, monthsBackFor(user));
     const current = shiftMonth(today, 0);
     let done = 0;
     emit({ phase: "fetch", done, total: todo.length, message: todo.length ? "Fetching " + todo.length + " month(s) of games" : "Games are up to date" });
@@ -120,8 +120,10 @@ export function startSync(username, { onProgress } = {}) {
   async function analysePhase() {
     const games = await store.getGames(user);
     const index = await store.getAnalysisIndex(user);
+    const from = windowStart(monthsBackFor(user)); // older stored games are left alone
     const todo = games
       .filter((g) => {
+        if (g.end_time < from) return false;
         const rec = index.get(g.id);
         return !(rec && rec.analysisVersion === CONFIG.analysisVersion) && !failedThisSession.has(user + ":" + g.id);
       })
