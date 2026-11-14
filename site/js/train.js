@@ -30,7 +30,7 @@ const tagLabel = (tag) => TAG_LABELS[tag] || tag;
 let puzzles = []; // every puzzle from my games
 let themed = null; // Lichess puzzles, or null when data/themed.json is missing
 let pool = []; // puzzles matching the filters
-let filters = { mode: "games", opening: "all", colour: "both", weakness: "all" };
+let filters = { mode: "games", opening: "all", colour: "both", tag: "all", weakness: "all" };
 let state = {};
 let board, current, answered;
 // Themed puzzles: the live position, the index of the next solution move, the last move shown
@@ -81,7 +81,8 @@ function applyFilters() {
   pool = puzzles.filter(
     (p) =>
       (filters.opening === "all" || p.opening_family === filters.opening) &&
-      (filters.colour === "both" || p.colour === filters.colour)
+      (filters.colour === "both" || p.colour === filters.colour) &&
+      (filters.tag === "all" || (p.tags || []).includes(filters.tag))
   );
 }
 
@@ -95,6 +96,19 @@ function buildOpeningOptions() {
   if (!counts.has(filters.opening)) filters.opening = "all";
   select.value = filters.opening;
   $("filter-colour").value = filters.colour;
+}
+
+// Mistake type options for my own games, with counts.
+function buildTagOptions() {
+  const counts = new Map();
+  for (const p of puzzles) for (const t of p.tags || []) counts.set(t, (counts.get(t) || 0) + 1);
+  const order = Object.keys(TAG_LABELS).filter((t) => counts.has(t));
+  const extra = [...counts.keys()].filter((t) => !TAG_LABELS[t]).sort();
+  const select = $("filter-tag");
+  select.replaceChildren(new Option("All mistake types", "all"));
+  for (const tag of [...order, ...extra]) select.append(new Option(`${tagLabel(tag)} (${counts.get(tag)})`, tag));
+  if (!counts.has(filters.tag)) filters.tag = "all";
+  select.value = filters.tag;
 }
 
 // Weakness options: tags that have themed puzzles, most frequent mistake first.
@@ -117,6 +131,7 @@ function syncFilterControls() {
   $("filter-mode").value = filters.mode;
   $("filter-opening").hidden = isThemed();
   $("filter-colour").hidden = isThemed();
+  $("filter-tag").hidden = isThemed();
   $("filter-weakness").hidden = !isThemed();
 }
 
@@ -453,8 +468,15 @@ async function init() {
   state = loadState();
   filters = loadFilters();
   if (filters.mode !== "themed") filters.mode = "games";
-  applyFilters();
+  // ?tag=<mistake type> overrides the saved filter; unknown values are ignored
+  const wanted = new URLSearchParams(location.search).get("tag");
+  if (wanted && puzzles.some((p) => (p.tags || []).includes(wanted))) {
+    filters.mode = "games";
+    filters.tag = wanted;
+  }
   buildOpeningOptions();
+  buildTagOptions();
+  applyFilters();
   buildWeaknessOptions();
   syncFilterControls();
 
@@ -481,6 +503,7 @@ async function init() {
       mode: $("filter-mode").value,
       opening: $("filter-opening").value,
       colour: $("filter-colour").value,
+      tag: $("filter-tag").value,
       weakness: $("filter-weakness").value,
     };
     saveFilters();
@@ -492,6 +515,7 @@ async function init() {
   $("filter-weakness").onchange = onFilter;
   $("filter-opening").onchange = onFilter;
   $("filter-colour").onchange = onFilter;
+  $("filter-tag").onchange = onFilter;
   advance();
 }
 

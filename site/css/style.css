@@ -164,3 +164,34 @@ td a { color: var(--accent); }
 .filters [hidden], #credit[hidden], #review-line[hidden] { display: none; }
 #credit { font-size: 0.85em; margin: 0; }
 #credit a { color: inherit; }
+
+/* Mistake type detail */
+.tag-buttons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.tag-button, .tag-close { min-width: 44px; min-height: 38px; }
+.tag-button:hover, .tag-close:hover { border-color: var(--accent); }
+.tag-panel { border-color: var(--accent); }
+.tag-panel .chart-head { align-items: center; margin-bottom: 8px; }
+.detail-count { font-size: 14px; font-weight: 400; }
+.detail-grid { display: grid; grid-template-columns: 1fr; gap: 16px; margin-bottom: 8px; }
+.detail-item { min-width: 0; }
+.detail-item h3, .detail-sub { font-size: 14px; margin: 0 0 6px; }
+.examples { margin: 0 0 12px; padding-left: 20px; }
+.examples li { margin-bottom: 6px; }
+.examples a { color: var(--accent); }
+.detail-train { margin: 0; }
+.button-link {
+  display: inline-block;
+  min-height: 38px;
+  padding: 8px 16px;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--surface);
+  font-weight: 600;
+  text-decoration: none;
+}
+.button-link:hover { text-decoration: underline; }
+@media (min-width: 800px) {
+  .detail-grid { grid-template-columns: 1fr 1fr; }
+}
+/* Themes recolour plain links; the button-style link must keep its own text colour. */
+:root[data-theme] a.button-link, a.button-link { color: var(--surface); text-decoration: none; }
