@@ -8,7 +8,6 @@ inaccuracy, mistake or blunder. Analysis files that cannot be read are skipped.
 
 import json
 import sys
-import time
 from datetime import datetime, timezone
 
 import chess
@@ -129,7 +128,7 @@ def main():
             if r["class"]:
                 totals[r["class"]] += 1
     out = fetch.DATA / "stats.json"
-    out.write_text(json.dumps({"generated": int(time.time()), "games": games, "moves": moves,
+    out.write_text(json.dumps({"games": games, "moves": moves,
                                "totals": totals, "dimensions": finish(buckets)},
                               separators=(",", ":")))
     print(f"Wrote stats for {games} game(s), {moves} move(s) to {out.name}")
