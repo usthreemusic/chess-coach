@@ -91,6 +91,9 @@ def build_index(username):
         for g in month["games"]:
             entry = {k: v for k, v in g.items() if k != "pgn"}
             entry["month"] = month["month"]
+            analysis = DATA / "analysis" / f"{g['id']}.json"
+            if analysis.exists():
+                entry["mistakes"] = json.loads(analysis.read_text())["counts"]
             games.append(entry)
     games.sort(key=lambda g: g["end_time"])
     index = {"username": username, "games": games}

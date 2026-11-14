@@ -7,6 +7,7 @@ Personal chess.com game review coach. A Python pipeline fetches and analyses gam
 ```sh
 python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/python pipeline/fetch.py        # incremental fetch from chess.com
+.venv/bin/python pipeline/analyse.py      # Stockfish analysis of games not yet analysed (needs `brew install stockfish`)
 python3 -m http.server -d site 8000       # then open http://localhost:8000
 ```
 
@@ -14,6 +15,10 @@ Settings live in `pipeline/config.toml`. Tests: `.venv/bin/python -m pytest test
 
 ## Automation
 
-`.github/workflows/update.yml` fetches new games nightly (and on every push or manual run), commits them, and redeploys the site. Run `git pull` before pushing local changes, because the workflow commits data to `main`.
+`.github/workflows/update.yml` fetches and analyses new games nightly (and on every push or manual run), commits the data, and redeploys the site. Run `git pull` before pushing local changes, because the workflow commits data to `main`.
 
 The feature roadmap is in `chess-review-coach-plan.md`.
+
+## Third-party code
+
+`site/vendor/` contains [chessground](https://github.com/lichess-org/chessground) (GPL-3.0) and [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause).

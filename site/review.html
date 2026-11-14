@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chess Coach — Review</title>
+<link rel="stylesheet" href="vendor/chessground.base.css">
+<link rel="stylesheet" href="vendor/chessground.brown.css">
+<link rel="stylesheet" href="vendor/chessground.cburnett.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
 <body>
@@ -16,6 +19,40 @@
     <a href="stats.html">Stats</a>
   </nav>
 </header>
-<main><div class="empty">Step-through game review with engine evaluations arrives with Phase 2.</div></main>
+<main>
+  <div class="empty" id="status" hidden></div>
+  <div id="review" hidden>
+    <div class="game-head">
+      <h2 id="title"></h2>
+      <p class="summary" id="meta"></p>
+    </div>
+    <div class="review">
+      <div class="board-col">
+        <div class="board-row">
+          <div id="bar" title="Engine evaluation"><div id="bar-white"></div></div>
+          <div id="board"></div>
+        </div>
+        <svg id="graph" preserveAspectRatio="none" role="img" aria-label="Evaluation over the game"></svg>
+      </div>
+      <div class="side">
+        <div class="eval-line"><span id="eval-text"></span> <span class="muted">Stockfish, depth 14</span></div>
+        <div id="info"></div>
+        <div class="controls">
+          <button id="first" aria-label="First move">⏮</button>
+          <button id="prev" aria-label="Previous move">◀</button>
+          <button id="next" aria-label="Next move">▶</button>
+          <button id="last" aria-label="Last move">⏭</button>
+          <button id="next-mistake">Next mistake</button>
+        </div>
+        <div id="moves"></div>
+        <div class="neighbours">
+          <a id="older" hidden>← Older game</a>
+          <a id="newer" hidden>Newer game →</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module" src="js/review.js"></script>
 </body>
 </html>

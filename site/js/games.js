@@ -40,12 +40,26 @@ function render() {
     cell(row, `${g.opponent} (${g.opponent_rating ?? "?"})`);
     cell(row, g.my_rating ?? "", "num");
     cell(row, g.opening, "opening");
-    cell(row, g.mistakes ?? "—", "num");
+    const mistakes = cell(row, g.mistakes ? "" : "—", "num");
+    if (g.mistakes) {
+      for (const kind of ["inaccuracy", "mistake", "blunder"]) {
+        const span = document.createElement("span");
+        span.className = `count ${kind}`;
+        span.title = kind;
+        span.textContent = g.mistakes[kind];
+        mistakes.append(span);
+      }
+    }
     const link = document.createElement("a");
-    link.href = g.url;
-    link.target = "_blank";
-    link.rel = "noopener";
-    link.textContent = "chess.com";
+    if (g.mistakes) {
+      link.href = `review.html?id=${encodeURIComponent(g.id)}`;
+      link.textContent = "Review";
+    } else {
+      link.href = g.url;
+      link.target = "_blank";
+      link.rel = "noopener";
+      link.textContent = "chess.com";
+    }
     cell(row, "").append(link);
   }
   $("empty").hidden = list.length > 0;

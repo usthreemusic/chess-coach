@@ -1,0 +1,1 @@
+{"id":"b9d2fb28-8810-11f1-a673-8bc10401000b","depth":14,"start_cp":26,"moves":[{"san":"e4","uci":"e2e4","cp":17,"clk":0.0},{"san":"c6","uci":"c7c6","best":"e5","best_uci":"e7e5","pv":["e5","Nf3","Nc6"],"cp":44,"clk":0.4}],"counts":{"inaccuracy":0,"mistake":0,"blunder":0}}

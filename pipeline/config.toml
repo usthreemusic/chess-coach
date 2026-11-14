@@ -1,8 +1,9 @@
 username = "robbosloth"
 
-# Used from Phase 2 onwards
 analysis_depth = 14
 stockfish_path = "stockfish"
+# Moves are not labelled once I am this far behind, or still this far ahead after the move
+decided_cp = 600
 
 [thresholds]  # centipawn drop from my perspective
 inaccuracy = 50
