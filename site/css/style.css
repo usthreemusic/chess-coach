@@ -87,13 +87,14 @@ td a { color: var(--accent); }
 .game-head h2 { margin: 0 0 2px; font-size: 17px; font-weight: 600; }
 .game-head a, .neighbours a { color: var(--accent); }
 .review { display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start; }
-.board-col { --size: min(calc(100vw - 32px - 26px), 560px); width: calc(var(--size) + 26px); }
+/* Board sizes follow their container, so themes that add borders or padding still fit a phone. */
+.board-col { width: 100%; max-width: 586px; min-width: 0; }
 .board-row { display: flex; gap: 8px; }
-#board { width: var(--size); height: var(--size); }
-#bar { width: 18px; height: var(--size); background: #2b2b2b; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column-reverse; border: 1px solid var(--line); }
+#board { flex: 1 1 0; min-width: 0; aspect-ratio: 1; }
+#bar { flex: 0 0 18px; width: 18px; align-self: stretch; background: #2b2b2b; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column-reverse; border: 1px solid var(--line); }
 #bar.flipped { flex-direction: column; }
 #bar-white { background: #f2f2ee; height: 50%; transition: height 0.2s; }
-#graph { display: block; width: var(--size); height: 64px; margin: 10px 0 0 26px; border-radius: 4px; border: 1px solid var(--line); cursor: pointer; }
+#graph { display: block; width: calc(100% - 26px); height: 64px; margin: 10px 0 0 26px; border-radius: 4px; border: 1px solid var(--line); cursor: pointer; }
 #graph line { vector-effect: non-scaling-stroke; }
 .g-black { fill: #2b2b2b; }
 .g-white { fill: #f2f2ee; }
@@ -130,7 +131,8 @@ td a { color: var(--accent); }
 .neighbours { display: flex; justify-content: space-between; margin-top: 12px; }
 
 /* Train page */
-.train-col { --size: min(calc(100vw - 32px), 560px); width: var(--size); }
+.train-col { width: 100%; max-width: 560px; min-width: 0; }
+.train-col #board { width: 100%; }
 #prompt { font-size: 17px; font-weight: 600; margin: 0 0 4px; }
 #result { min-height: 48px; margin-bottom: 4px; }
 #result p { margin: 0 0 4px; }
@@ -152,3 +154,8 @@ td a { color: var(--accent); }
 @media (min-width: 800px) {
   .chart-grid { grid-template-columns: 1fr 1fr; }
 }
+
+/* Themed mode */
+.filters [hidden], #credit[hidden], #review-line[hidden] { display: none; }
+#credit { font-size: 0.85em; margin: 0; }
+#credit a { color: inherit; }

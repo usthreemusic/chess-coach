@@ -20,6 +20,16 @@ const BAR_DIMS = [
   ["colour", "Colour"],
 ];
 
+const MISTAKE_TYPE_LABELS = {
+  missed_mate: "Missed mate",
+  missed_capture: "Missed capture",
+  missed_fork: "Missed fork",
+  hung_piece: "Hung a piece",
+  back_rank: "Back rank",
+  endgame: "Endgame",
+  other: "Other",
+};
+
 let data = null;
 
 const rate = (b) => (b.moves ? ((b.mistake + b.blunder) / b.moves) * 100 : 0);
@@ -54,7 +64,15 @@ function withAlpha(colour, alpha) {
   return c;
 }
 
-function tooltipLines(b) {
+function tooltipLines(b, count) {
+  if (count) {
+    return [
+      `Mistakes and blunders: ${b.moves}`,
+      `Mistakes: ${b.mistake}`,
+      `Blunders: ${b.blunder}`,
+      `Games: ${b.games}`,
+    ];
+  }
   const lines = [
     `Error rate: ${fmt(rate(b))} per 100 moves${isLow(b) ? " (few moves)" : ""}`,
     `Mistakes: ${b.mistake}`,
@@ -119,7 +137,8 @@ const valueLabels = {
     ctx.textBaseline = "middle";
     meta.data.forEach((bar, i) => {
       ctx.textAlign = "left";
-      ctx.fillText(fmt(chart.data.datasets[0].data[i]), bar.x + 6, bar.y);
+      const value = chart.data.datasets[0].data[i];
+      ctx.fillText(opts.count ? String(value) : fmt(value), bar.x + 6, bar.y);
     });
     ctx.restore();
   },
@@ -127,7 +146,7 @@ const valueLabels = {
 
 const charts = [];
 
-function baseTooltip(rows, colours) {
+function baseTooltip(rows, colours, count) {
   return {
     backgroundColor: colours.surface,
     titleColor: colours.text,
@@ -137,19 +156,20 @@ function baseTooltip(rows, colours) {
     displayColors: false,
     callbacks: {
       title: (items) => items[0].label,
-      label: (item) => tooltipLines(rows[item.dataIndex]),
+      label: (item) => tooltipLines(rows[item.dataIndex], count),
     },
   };
 }
 
-function barChart(canvas, rows, labels, colours) {
+// count: bars show how many mistakes and blunders there are, not a rate per 100 moves
+function barChart(canvas, rows, labels, colours, count = false) {
   return new Chart(canvas, {
     type: "bar",
     data: {
       labels,
       datasets: [{
-        data: rows.map(rate),
-        backgroundColor: rows.map((b) => (isLow(b) ? colours.accentLow : colours.accent)),
+        data: rows.map(count ? (b) => b.moves : rate),
+        backgroundColor: rows.map((b) => (!count && isLow(b) ? colours.accentLow : colours.accent)),
         borderRadius: 4,
         barPercentage: 0.7,
         categoryPercentage: 0.9,
@@ -167,7 +187,7 @@ function barChart(canvas, rows, labels, colours) {
           grid: { color: colours.line },
           border: { display: false },
           ticks: { color: colours.muted },
-          title: { display: true, text: "Errors per 100 moves", color: colours.muted },
+          title: { display: true, text: count ? "Mistakes and blunders (count)" : "Errors per 100 moves", color: colours.muted },
         },
         y: {
           grid: { display: false },
@@ -177,8 +197,8 @@ function barChart(canvas, rows, labels, colours) {
       },
       plugins: {
         legend: { display: false },
-        tooltip: baseTooltip(rows, colours),
-        valueLabels: { colour: colours.text },
+        tooltip: baseTooltip(rows, colours, count),
+        valueLabels: { colour: colours.text, count },
       },
     },
     plugins: [valueLabels],
@@ -270,6 +290,13 @@ function renderCharts() {
       : "Lighter bars have fewer than 150 moves.";
     const canvas = addCard(host, title, note, Math.max(120, rows.length * 36 + 60), false);
     charts.push(barChart(canvas, rows, rows.map((b) => cap(b.key)), colours));
+  }
+  const types = [...(data.dimensions.mistake_type || [])].sort((a, b) => b.moves - a.moves);
+  if (types.length) {
+    const canvas = addCard(host, "Mistake type",
+      "How many of your mistakes and blunders have each tag. One mistake can have several tags.",
+      Math.max(120, types.length * 36 + 60), false);
+    charts.push(barChart(canvas, types, types.map((b) => MISTAKE_TYPE_LABELS[b.key] || cap(b.key)), colours, true));
   }
 }
 

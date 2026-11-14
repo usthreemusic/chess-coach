@@ -26,3 +26,8 @@ def test_builds_only_my_mistakes():
     assert (p["played_san"], p["class"], p["drop"]) == ("f6", "mistake", 150)
     assert p["opening"] == "Sicilian Defense"
     assert (p["opening_family"], p["colour"]) == ("Sicilian Defense", "black")
+
+
+def test_puzzles_carry_tags():
+    result = puzzles.build_puzzles(GAME, ANALYSIS)
+    assert result[0]["tags"] == ["other"]

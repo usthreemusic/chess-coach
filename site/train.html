@@ -25,12 +25,17 @@
   <div class="empty" id="status" hidden></div>
   <div id="train" hidden>
     <div class="filters">
+      <select id="filter-mode" aria-label="Puzzles">
+        <option value="games">From my games</option>
+        <option value="themed">Themed (Lichess)</option>
+      </select>
       <select id="filter-opening" aria-label="Opening"></select>
       <select id="filter-colour" aria-label="Colour">
         <option value="both">Both colours</option>
         <option value="white">White</option>
         <option value="black">Black</option>
       </select>
+      <select id="filter-weakness" aria-label="Weakness" hidden></select>
     </div>
     <p class="summary" id="counts"></p>
     <div class="train-done empty" id="done" hidden></div>
@@ -46,7 +51,8 @@
           <button id="show-answer">Show answer</button>
           <button id="next" hidden>Next puzzle</button>
         </div>
-        <p><a id="review-link">Review this game</a></p>
+        <p id="review-line"><a id="review-link">Review this game</a></p>
+        <p class="muted" id="credit" hidden><a id="credit-link" href="https://lichess.org/training" target="_blank" rel="noopener">Puzzles from the Lichess puzzle database (CC0)</a></p>
       </div>
     </div>
     <div class="controls">

@@ -14,31 +14,18 @@ from datetime import datetime, timezone
 import chess
 
 import fetch
+import themes
+from chessutil import ENDGAME_MATERIAL, OPENING_MOVES, VALUES, material, phase_of  # noqa: F401
 
 ANALYSIS = fetch.DATA / "analysis"
 CLASSES = ("inaccuracy", "mistake", "blunder")
-VALUES = {chess.QUEEN: 9, chess.ROOK: 5, chess.BISHOP: 3, chess.KNIGHT: 3}
-OPENING_MOVES = 12  # my full-move numbers below this are the opening
-ENDGAME_MATERIAL = 13  # non-pawn material of both sides together
 PRESSURE = 0.10
 PIECES = {chess.PAWN: "pawn", chess.KNIGHT: "knight", chess.BISHOP: "bishop",
           chess.ROOK: "rook", chess.QUEEN: "queen", chess.KING: "king"}
 DIMENSIONS = ("phase", "opening", "colour", "time_class", "time_pressure", "piece", "month")
+MISTAKE_TYPE = "mistake_type"  # counts of tagged mistakes and blunders, not a rate
 PRESSURE_LOW = "under 10% of clock"
 PRESSURE_OK = "10% or more"
-
-
-def material(board):
-    """Queens, rooks, bishops and knights of both sides, in points."""
-    return sum(len(board.pieces(pt, colour)) * v
-               for pt, v in VALUES.items() for colour in (chess.WHITE, chess.BLACK))
-
-
-def phase_of(board):
-    """Phase of the position before my move (board.fullmove_number is that move's number)."""
-    if board.fullmove_number < OPENING_MOVES:
-        return "opening"
-    return "endgame" if material(board) <= ENDGAME_MATERIAL else "middlegame"
 
 
 def base_seconds(time_control):
@@ -85,6 +72,8 @@ def game_records(game, analysis):
                 "month": month,
                 "class": move.get("class") if move.get("class") in CLASSES else None,
             }
+            if record["class"] in themes.KEPT:
+                record["tags"] = themes.tags_for_move(board, analysis["moves"], k, mine_is_white)
             records.append(record)
         board.push(uci)
     return records
@@ -103,6 +92,12 @@ def add_game(buckets, game_id, records):
             b["moves"] += 1
             if record["class"]:
                 b[record["class"]] += 1
+        for tag in record.get("tags", ()):
+            b = buckets.setdefault(MISTAKE_TYPE, {}).setdefault(tag, {"key": tag, "games": set(), "moves": 0,
+                                                       "inaccuracy": 0, "mistake": 0, "blunder": 0})
+            b["games"].add(game_id)
+            b["moves"] += 1
+            b[record["class"]] += 1
 
 
 def finish(buckets):
@@ -115,7 +110,7 @@ def finish(buckets):
 
 
 def main():
-    buckets = {dim: {} for dim in DIMENSIONS}
+    buckets = {dim: {} for dim in (*DIMENSIONS, MISTAKE_TYPE)}
     games = moves = 0
     totals = dict.fromkeys(CLASSES, 0)
     for game in load_games():

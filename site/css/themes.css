@@ -96,7 +96,7 @@
   font-size: 18px;
   text-align: left;
 }
-:root[data-theme="pastel"] .table-wrap::before { content: "My_games" !important; position: sticky; left: 0; margin: 0; min-height: 28px; box-sizing: border-box; line-height: 1.2; }
+:root[data-theme="pastel"] .table-wrap::before { content: "My_games" !important; position: sticky; left: 0; margin: 0 !important; min-height: 28px; box-sizing: border-box; line-height: 1.2; }
 :root[data-theme="pastel"] #prompt::before { content: "My_blunder.txt" !important; --tb: #f25ca2 !important; }
 :root[data-theme="pastel"] #prompt { --tb: #f25ca2 !important; font-size: 22px; font-weight: 400; }
 :root[data-theme="pastel"] #moves::before { content: "Move_list.log" !important; grid-column: 1 / -1; position: sticky; top: 0; z-index: 1; margin-bottom: 4px; }

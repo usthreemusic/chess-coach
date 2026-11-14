@@ -15,11 +15,28 @@ const DAY = 86400000;
 const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21]; // indexed by box, 1-5
 const LEARNED_BOX = 4;
 
-let puzzles = []; // every puzzle
+const THEMED_DELAY = 500; // ms before the opponent's reply is played in themed puzzles
+const TAG_LABELS = {
+  missed_mate: "Missed mate",
+  missed_capture: "Missed capture",
+  missed_fork: "Missed fork",
+  hung_piece: "Hung a piece",
+  back_rank: "Back rank",
+  endgame: "Endgame",
+  other: "Other",
+};
+const tagLabel = (tag) => TAG_LABELS[tag] || tag;
+
+let puzzles = []; // every puzzle from my games
+let themed = null; // Lichess puzzles, or null when data/themed.json is missing
 let pool = []; // puzzles matching the filters
-let filters = { opening: "all", colour: "both" };
+let filters = { mode: "games", opening: "all", colour: "both", weakness: "all" };
 let state = {};
 let board, current, answered;
+// Themed puzzles: the live position, the index of the next solution move, the last move shown
+let chess, step, lastMove, playToken = 0;
+
+const isThemed = () => filters.mode === "themed";
 
 function loadState() {
   try {
@@ -57,6 +74,10 @@ function saveFilters() {
 }
 
 function applyFilters() {
+  if (isThemed()) {
+    pool = (themed || []).filter((p) => filters.weakness === "all" || p.tag === filters.weakness);
+    return;
+  }
   pool = puzzles.filter(
     (p) =>
       (filters.opening === "all" || p.opening_family === filters.opening) &&
@@ -76,24 +97,50 @@ function buildOpeningOptions() {
   $("filter-colour").value = filters.colour;
 }
 
+// Weakness options: tags that have themed puzzles, most frequent mistake first.
+function buildWeaknessOptions() {
+  const mine = new Map();
+  for (const p of puzzles) for (const t of p.tags || []) mine.set(t, (mine.get(t) || 0) + 1);
+  const counts = new Map();
+  for (const p of themed || []) counts.set(p.tag, (counts.get(p.tag) || 0) + 1);
+  const tags = [...counts.keys()].sort(
+    (a, b) => (mine.get(b) || 0) - (mine.get(a) || 0) || counts.get(b) - counts.get(a) || a.localeCompare(b)
+  );
+  const select = $("filter-weakness");
+  select.replaceChildren(new Option("All weaknesses", "all"));
+  for (const tag of tags) select.append(new Option(`${tagLabel(tag)} (${counts.get(tag)})`, tag));
+  if (!counts.has(filters.weakness)) filters.weakness = "all";
+  select.value = filters.weakness;
+}
+
+function syncFilterControls() {
+  $("filter-mode").value = filters.mode;
+  $("filter-opening").hidden = isThemed();
+  $("filter-colour").hidden = isThemed();
+  $("filter-weakness").hidden = !isThemed();
+}
+
 function record(puzzle, solved) {
-  const box = state[puzzle.id]?.box ?? 1;
+  const box = state[puzzle.key]?.box ?? 1;
   const next = solved ? Math.min(5, box + 1) : 1;
-  state[puzzle.id] = { box: next, due: Date.now() + INTERVAL_DAYS[next] * DAY };
+  state[puzzle.key] = { box: next, due: Date.now() + INTERVAL_DAYS[next] * DAY };
   saveState();
 }
 
 function dueList() {
   const now = Date.now();
   return pool
-    .filter((p) => state[p.id] && state[p.id].due <= now)
-    .sort((a, b) => state[a.id].due - state[b.id].due);
+    .filter((p) => state[p.key] && state[p.key].due <= now)
+    .sort((a, b) => state[a.key].due - state[b.key].due);
 }
 
+// Games: newest first. Themed: the file's order.
 const unseenList = () =>
-  pool.filter((p) => !state[p.id]).sort((a, b) => b.end_time - a.end_time || b.ply - a.ply);
+  pool
+    .filter((p) => !state[p.key])
+    .sort(isThemed() ? () => 0 : (a, b) => b.end_time - a.end_time || b.ply - a.ply);
 
-const learnedCount = () => pool.filter((p) => state[p.id] && state[p.id].box >= LEARNED_BOX).length;
+const learnedCount = () => pool.filter((p) => state[p.key] && state[p.key].box >= LEARNED_BOX).length;
 
 // Recency drives the queue: a puzzle's weight halves for every HALF_LIFE_DAYS
 // of game age, and a review that is due counts REVIEW_BOOST times an unseen one.
@@ -103,20 +150,22 @@ const recentlyShown = [];
 
 function priority(puzzle, now) {
   const ageDays = (now / 1000 - puzzle.end_time) / 86400;
-  return Math.pow(0.5, ageDays / HALF_LIFE_DAYS) * (state[puzzle.id] ? REVIEW_BOOST : 1);
+  return Math.pow(0.5, ageDays / HALF_LIFE_DAYS) * (state[puzzle.key] ? REVIEW_BOOST : 1);
 }
 
 function pickNext(skipId) {
   const now = Date.now();
-  const queue = [...dueList(), ...unseenList()].sort((a, b) => priority(b, now) - priority(a, now));
+  const queue = [...dueList(), ...unseenList()];
+  // Themed: due reviews (oldest first) then unseen in file order. Games: recency-weighted.
+  if (!isThemed()) queue.sort((a, b) => priority(b, now) - priority(a, now));
   // Do not bring a puzzle straight back: skip the last few shown while others remain.
   const next =
-    queue.find((p) => p.id !== skipId && !recentlyShown.includes(p.id)) ||
-    queue.find((p) => p.id !== skipId) ||
+    queue.find((p) => p.key !== skipId && !recentlyShown.includes(p.key)) ||
+    queue.find((p) => p.key !== skipId) ||
     queue[0] ||
     null;
   if (next) {
-    recentlyShown.push(next.id);
+    recentlyShown.push(next.key);
     if (recentlyShown.length > 5) recentlyShown.shift();
   }
   return next;
@@ -141,13 +190,12 @@ function destsFor(chess) {
   return dests;
 }
 
-function setMovable(enabled) {
-  const chess = new Chess(current.fen);
-  const colour = chess.turn() === "w" ? "white" : "black";
+function setMovable(enabled, position = new Chess(current.fen)) {
+  const colour = position.turn() === "w" ? "white" : "black";
   board.set({
-    fen: current.fen,
+    fen: position.fen(),
     turnColor: colour,
-    movable: { free: false, color: enabled ? colour : undefined, dests: enabled ? destsFor(chess) : new Map() },
+    movable: { free: false, color: enabled ? colour : undefined, dests: enabled ? destsFor(position) : new Map() },
   });
 }
 
@@ -160,11 +208,14 @@ function showRest(label, className) {
 
 function finish(solved, altSan) {
   answered = true;
+  playToken++; // cancel a pending opponent reply
   record(current, solved);
   updateCounts();
   $("show-answer").hidden = true;
   $("next").hidden = false;
   $("next").focus();
+  $("show-answer").disabled = false;
+  if (isThemed()) return finishThemed(solved);
   if (solved) {
     board.set({ movable: { color: undefined } });
     if (altSan) {
@@ -185,8 +236,79 @@ function finish(solved, altSan) {
   }
 }
 
+const sq = (uci) => [uci.slice(0, 2), uci.slice(2, 4)];
+
+// SAN for a line of UCI moves played from the live position (stops at an illegal one).
+function sanLine(ucis) {
+  const c = new Chess(chess.fen());
+  const out = [];
+  for (const uci of ucis) {
+    try {
+      out.push(c.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] }).san);
+    } catch (err) {
+      break;
+    }
+  }
+  return out;
+}
+
+function finishThemed(solved) {
+  if (solved) {
+    board.set({ movable: { color: undefined } });
+    $("result").replaceChildren(el("p", "solved", "Solved!"));
+    return;
+  }
+  const line = sanLine(current.solution.slice(step));
+  const rest = line.slice(1).join(" ");
+  $("result").replaceChildren(el("p", "failed", `Best was ${line[0] || "?"}${rest ? `, then ${rest}` : ""}.`));
+  setMovable(false, chess); // snap back to the position before the wrong move
+  board.set({ lastMove });
+  board.setAutoShapes([{ orig: sq(current.solution[step])[0], dest: sq(current.solution[step])[1], brush: "green" }]);
+}
+
+function onThemedMove(orig, dest) {
+  const expected = current.solution[step];
+  const move = chess.moves({ verbose: true }).find((m) => m.from === orig && m.to === dest);
+  if (!move) return finish(false);
+  // Promote to the solution's piece when the squares match, else to a queen.
+  const promotion = move.promotion ? (expected.slice(0, 4) === orig + dest && expected[4]) || "q" : undefined;
+  let ok = orig + dest + (promotion || "") === expected;
+  if (!ok) {
+    // Any checkmate is as good as an expected checkmate.
+    const wanted = new Chess(chess.fen());
+    wanted.move({ from: sq(expected)[0], to: sq(expected)[1], promotion: expected[4] });
+    if (wanted.isCheckmate()) {
+      const mine = new Chess(chess.fen());
+      mine.move({ from: orig, to: dest, promotion });
+      ok = mine.isCheckmate();
+    }
+  }
+  if (!ok) return finish(false);
+  chess.move({ from: orig, to: dest, promotion });
+  step++;
+  lastMove = [orig, dest];
+  board.set({ fen: chess.fen(), lastMove });
+  if (step >= current.solution.length || chess.isGameOver()) return finish(true);
+  setMovable(false, chess);
+  $("show-answer").disabled = true;
+  const token = ++playToken;
+  setTimeout(() => {
+    if (token !== playToken || answered) return;
+    const reply = current.solution[step];
+    chess.move({ from: sq(reply)[0], to: sq(reply)[1], promotion: reply[4] });
+    step++;
+    lastMove = sq(reply);
+    board.set({ lastMove });
+    $("show-answer").disabled = false;
+    if (step >= current.solution.length) return finish(true);
+    setMovable(true, chess);
+    board.set({ lastMove });
+  }, THEMED_DELAY);
+}
+
 function onMove(orig, dest) {
   if (answered) return;
+  if (isThemed()) return onThemedMove(orig, dest);
   const chess = new Chess(current.fen);
   const alts = current.alts || [];
   // Auto-promote to queen unless an accepted answer on these squares promotes otherwise.
@@ -199,9 +321,35 @@ function onMove(orig, dest) {
   finish(false);
 }
 
+function showThemed(puzzle) {
+  chess = new Chess(puzzle.fen);
+  step = 0;
+  lastMove = sq(puzzle.last_uci);
+  const colour = chess.turn() === "w" ? "white" : "black";
+  board.set({ orientation: colour, lastMove });
+  board.setAutoShapes([]);
+  setMovable(true, chess);
+  board.set({ lastMove });
+  $("prompt").textContent = `Themed puzzle: ${tagLabel(puzzle.tag)}. Find the best move.`;
+  $("puzzle-meta").textContent = `Rating ${puzzle.rating} · you are ${colour}`;
+  $("credit-link").href = `https://lichess.org/training/${encodeURIComponent(puzzle.id)}`;
+}
+
 function showPuzzle(puzzle) {
   current = puzzle;
   answered = false;
+  playToken++;
+  $("review-line").hidden = isThemed();
+  $("credit").hidden = !isThemed();
+  $("show-answer").disabled = false;
+  $("result").replaceChildren();
+  $("show-answer").hidden = false;
+  $("next").hidden = true;
+  if (isThemed()) {
+    showThemed(puzzle);
+    updateCounts();
+    return;
+  }
   const chess = new Chess(puzzle.fen);
   const colour = chess.turn() === "w" ? "white" : "black";
   board.set({ orientation: colour, lastMove: undefined });
@@ -212,16 +360,20 @@ function showPuzzle(puzzle) {
   $("puzzle-meta").textContent =
     `${formatDate(puzzle.end_time * 1000)} · ${puzzle.time_class} · ${puzzle.opening_family} · ${puzzle.opening || "Unknown opening"} · you are ${colour}`;
   $("review-link").href = `review.html?id=${encodeURIComponent(puzzle.game_id)}&ply=${puzzle.ply}`;
-  $("result").replaceChildren();
-  $("show-answer").hidden = false;
-  $("next").hidden = true;
   updateCounts();
 }
 
 function showDone() {
   current = null;
+  playToken++;
   $("puzzle").hidden = true;
-  const upcoming = pool.map((p) => state[p.id]).filter(Boolean).map((s) => s.due).filter((d) => d > Date.now());
+  if (isThemed() && !themed) {
+    $("done").textContent = "Themed puzzles are not available yet. They are built by running pipeline/lichess.py, which writes data/themed.json.";
+    $("done").hidden = false;
+    updateCounts();
+    return;
+  }
+  const upcoming = pool.map((p) => state[p.key]).filter(Boolean).map((s) => s.due).filter((d) => d > Date.now());
   $("done").textContent = upcoming.length
     ? `Nothing is due and nothing is unseen. The next puzzle is due ${formatDate(Math.min(...upcoming))}.`
     : "No puzzles match these filters.";
@@ -281,17 +433,30 @@ async function init() {
     $("status").textContent = message;
     $("status").hidden = false;
   };
-  try {
-    const resp = await fetch("data/puzzles.json");
-    if (!resp.ok) throw new Error(resp.status);
-    puzzles = (await resp.json()).puzzles;
-  } catch (err) {
+  const load = async (url) => {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(resp.status);
+      return (await resp.json()).puzzles;
+    } catch (err) {
+      return null;
+    }
+  };
+  const mine = await load("data/puzzles.json");
+  themed = await load("data/themed.json");
+  if (!mine && !themed) {
     return fail("Could not load data/puzzles.json. Puzzles appear once games have been analysed.");
   }
+  puzzles = mine || [];
+  for (const p of puzzles) p.key = p.id;
+  for (const p of themed || []) p.key = `L:${p.id}`; // cannot collide with game puzzle ids
   state = loadState();
   filters = loadFilters();
+  if (filters.mode !== "themed") filters.mode = "games";
   applyFilters();
   buildOpeningOptions();
+  buildWeaknessOptions();
+  syncFilterControls();
 
   $("train").hidden = false;
   board = Chessground($("board"), {
@@ -303,7 +468,7 @@ async function init() {
   $("show-answer").onclick = () => {
     if (!answered) finish(false);
   };
-  $("next").onclick = () => advance(current && current.id);
+  $("next").onclick = () => advance(current && current.key);
   $("export").onclick = exportProgress;
   $("import").onclick = () => $("import-file").click();
   $("import-file").onchange = (event) => {
@@ -312,14 +477,28 @@ async function init() {
     if (file) importProgress(file);
   };
   const onFilter = () => {
-    filters = { opening: $("filter-opening").value, colour: $("filter-colour").value };
+    filters = {
+      mode: $("filter-mode").value,
+      opening: $("filter-opening").value,
+      colour: $("filter-colour").value,
+      weakness: $("filter-weakness").value,
+    };
     saveFilters();
     applyFilters();
+    syncFilterControls();
     advance();
   };
+  $("filter-mode").onchange = onFilter;
+  $("filter-weakness").onchange = onFilter;
   $("filter-opening").onchange = onFilter;
   $("filter-colour").onchange = onFilter;
   advance();
 }
+
+// Chessground caches where the board sits on the page. Refresh that whenever the
+// layout moves (theme switch, filters wrapping), or drags land on the wrong squares.
+const refreshBoard = () => board && board.redrawAll();
+window.addEventListener("themechange", refreshBoard);
+new ResizeObserver(refreshBoard).observe(document.body);
 
 init();

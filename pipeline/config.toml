@@ -13,3 +13,10 @@ alt_margin_cp = 50
 inaccuracy = 50
 mistake = 100
 blunder = 200
+
+[themed]  # pipeline/lichess.py: slice of the Lichess puzzle database
+rating_min = 800
+rating_max = 1300
+total = 2000
+min_popularity = 80
+min_plays = 500

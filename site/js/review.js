@@ -229,4 +229,10 @@ async function init() {
   show(ply > 0 ? ply - 1 : 0);
 }
 
+// Chessground caches where the board sits on the page. Refresh that whenever the
+// layout moves (theme switch, filters wrapping), or drags land on the wrong squares.
+const refreshBoard = () => board && board.redrawAll();
+window.addEventListener("themechange", refreshBoard);
+new ResizeObserver(refreshBoard).observe(document.body);
+
 init();

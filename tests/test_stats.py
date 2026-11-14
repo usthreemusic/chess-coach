@@ -75,3 +75,16 @@ def test_castling_counts_as_king_and_buckets():
     assert rows["pawn"]["moves"] == 2 and rows["pawn"]["games"] == 2
     assert rows["king"] == {"key": "king", "games": 1, "moves": 1,
                             "inaccuracy": 0, "mistake": 1, "blunder": 0}
+
+
+def test_mistake_type_counts_tagged_mistakes():
+    buckets = {dim: {} for dim in stats.DIMENSIONS}
+    records = [
+        {**dict.fromkeys(stats.DIMENSIONS, "x"), "class": "blunder", "tags": ["hung_piece", "endgame"]},
+        {**dict.fromkeys(stats.DIMENSIONS, "x"), "class": "mistake", "tags": ["hung_piece"]},
+        {**dict.fromkeys(stats.DIMENSIONS, "x"), "class": "inaccuracy"},
+    ]
+    stats.add_game(buckets, "g", records)
+    hung = buckets["mistake_type"]["hung_piece"]
+    assert (hung["moves"], hung["mistake"], hung["blunder"], hung["inaccuracy"], len(hung["games"])) == (2, 1, 1, 0, 1)
+    assert buckets["mistake_type"]["endgame"]["moves"] == 1

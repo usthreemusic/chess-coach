@@ -12,6 +12,7 @@ from collections import Counter
 import chess
 
 import fetch
+import themes
 
 ANALYSIS = fetch.DATA / "analysis"
 KEPT = ("mistake", "blunder")
@@ -43,6 +44,7 @@ def build_puzzles(game, analysis):
                 "opening": game.get("opening", ""),
                 "opening_family": fetch.opening_family(game.get("opening", "")),
                 "colour": game["colour"],
+                "tags": themes.tags_for_move(board, analysis["moves"], k, mine_is_white),
             })
         board.push_uci(move["uci"])
     return puzzles
