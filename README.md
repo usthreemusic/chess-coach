@@ -21,6 +21,10 @@ Settings live in `pipeline/config.toml`. Tests: `.venv/bin/python -m pytest test
 
 The feature roadmap is in `chess-review-coach-plan.md`.
 
+## Themes
+
+The site has four switchable looks: Pastel desktop (default), Chess Coach 95, CHESS.EXE and Plain (the original look). `site/js/theme.js` stores the choice in localStorage (`chess-coach-theme`) and sets `data-theme` on `<html>`; `site/css/themes.css` holds one section per theme. To add one, add it to the `THEMES` list in `theme.js` and add a `:root[data-theme="name"]` section that redefines the colour variables and restyles the panels and board.
+
 ## Third-party code
 
-`site/vendor/` contains [chessground](https://github.com/lichess-org/chessground) (GPL-3.0) and [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause).
+`site/vendor/` contains [chessground](https://github.com/lichess-org/chessground) (GPL-3.0) [chess.js](https://github.com/jhlywa/chess.js) (BSD-2-Clause) and the VT323 font (SIL Open Font License).

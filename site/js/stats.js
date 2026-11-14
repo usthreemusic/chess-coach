@@ -115,7 +115,7 @@ const valueLabels = {
     const { ctx } = chart;
     ctx.save();
     ctx.fillStyle = opts.colour;
-    ctx.font = "12px system-ui, sans-serif";
+    ctx.font = `12px ${getComputedStyle(document.body).fontFamily}`;
     ctx.textBaseline = "middle";
     meta.data.forEach((bar, i) => {
       ctx.textAlign = "left";
@@ -255,6 +255,7 @@ function renderCharts() {
   const host = $("charts");
   host.replaceChildren();
   const colours = chartColours();
+  Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
 
   const months = data.dimensions.month || [];
   if (months.length) {
@@ -299,6 +300,7 @@ async function init() {
   // Colours come from CSS variables, so redraw when the colour scheme changes
   const mq = window.matchMedia("(prefers-color-scheme: dark)");
   mq.addEventListener("change", renderCharts);
+  window.addEventListener("themechange", renderCharts);
 }
 
 init();

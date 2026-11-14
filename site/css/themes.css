@@ -1,0 +1,357 @@
+/* Themes. Loaded after style.css (and after the chessground stylesheets).
+   The theme is chosen by js/theme.js, which sets data-theme on <html>.
+   "plain" has no rules here: it is the original look with automatic dark mode.
+   Each theme sets its own fixed colour variables, so none has a dark variant.
+   Sections: font, then pastel, win95, dos. */
+
+@font-face {
+  font-family: "VT323";
+  src: url("../vendor/vt323.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+/* ====================================================================
+   PASTEL DESKTOP (default). Every panel is a little window.
+   ==================================================================== */
+:root[data-theme="pastel"] {
+  --bg: #b9a0f5;
+  --surface: #ffffff;
+  --text: #2a1a5e;
+  --muted: #3d2d78;
+  --line: #cdb9fa;
+  --accent: #5b35c9;
+  --win: #0a6b3a;
+  --loss: #b3206a;
+  --draw: #6b5e00;
+  --inaccuracy: #876100;
+  --mistake: #b34700;
+  --blunder: #b3206a;
+}
+:root[data-theme="pastel"] body {
+  background-color: #b9a0f5;
+  background-image: repeating-radial-gradient(ellipse 140px 26px at 50% 0, transparent 0 22px, #cdb9fa 22px 24px);
+  background-size: 280px 52px;
+  font: 20px/1.2 "VT323", "Courier New", monospace;
+}
+:root[data-theme="pastel"] :focus-visible { outline: 3px solid #2a1a5e; outline-offset: 3px; }
+:root[data-theme="pastel"] header {
+  background: #3ecbf0;
+  border-bottom: 3px solid #2a1a5e;
+  box-shadow: 0 6px 0 #2a1a5e;
+  margin-bottom: 6px;
+  align-items: center;
+}
+:root[data-theme="pastel"] header h1 { font-size: 26px; font-weight: 400; background: #fff; border: 3px solid #2a1a5e; padding: 0 10px; box-shadow: 3px 3px 0 #2a1a5e; }
+:root[data-theme="pastel"] nav { flex-wrap: wrap; gap: 8px 10px; }
+:root[data-theme="pastel"] nav a { color: #2a1a5e; padding: 2px 10px; border: 3px solid transparent; }
+:root[data-theme="pastel"] nav a:hover { text-decoration: underline; }
+:root[data-theme="pastel"] nav a.active { background: #ffc21a; border: 3px solid #2a1a5e; box-shadow: 3px 3px 0 #2a1a5e; }
+:root[data-theme="pastel"] .theme-picker { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+:root[data-theme="pastel"] a { color: #2a1a5e; text-decoration: underline; }
+:root[data-theme="pastel"] td a { color: #5b35c9; }
+
+/* Buttons and selects */
+:root[data-theme="pastel"] select,
+:root[data-theme="pastel"] button {
+  background: #fff;
+  color: #2a1a5e;
+  border: 3px solid #2a1a5e;
+  border-radius: 6px;
+  box-shadow: 3px 3px 0 #2a1a5e;
+  min-height: 36px;
+}
+:root[data-theme="pastel"] button:hover { background: #ffe9a8; }
+:root[data-theme="pastel"] button:active { transform: translate(3px, 3px); box-shadow: none; }
+:root[data-theme="pastel"] #show-answer,
+:root[data-theme="pastel"] #next,
+:root[data-theme="pastel"] #next-mistake,
+:root[data-theme="pastel"] #more { background: #ffc21a; }
+:root[data-theme="pastel"] #show-answer:hover,
+:root[data-theme="pastel"] #next:hover,
+:root[data-theme="pastel"] #next-mistake:hover,
+:root[data-theme="pastel"] #more:hover { background: #ffd966; }
+
+/* Windows: white fill, outline, hard shadow, coloured title bar */
+:root[data-theme="pastel"] :is(.table-wrap, #prompt, #moves, #info, .weak, .chart-card, .train-done, #status) {
+  --px: 14px; --py: 12px; --tb: #3ecbf0;
+  background: #fff;
+  border: 3px solid #2a1a5e;
+  border-radius: 0;
+  box-shadow: 6px 6px 0 #2a1a5e;
+  margin-bottom: 14px;
+}
+:root[data-theme="pastel"] :is(#prompt, #info, .weak, .chart-card, .train-done, #status) { padding: var(--py) var(--px); }
+:root[data-theme="pastel"] .table-wrap { --px: 0px; --py: 0px; }
+:root[data-theme="pastel"] #moves { --px: 8px; --py: 8px; margin-bottom: 14px; }
+:root[data-theme="pastel"] :is(.table-wrap, #prompt, #moves, #info, .weak, .chart-card, .train-done, #status)::before {
+  content: "";
+  display: block;
+  margin: calc(var(--py) * -1) calc(var(--px) * -1) var(--py);
+  padding: 2px 10px;
+  background: var(--tb);
+  color: #2a1a5e;
+  border-bottom: 3px solid #2a1a5e;
+  font-size: 18px;
+  text-align: left;
+}
+:root[data-theme="pastel"] .table-wrap::before { content: "My_games" !important; position: sticky; left: 0; margin: 0; min-height: 28px; box-sizing: border-box; line-height: 1.2; }
+:root[data-theme="pastel"] #prompt::before { content: "My_blunder.txt" !important; --tb: #f25ca2 !important; }
+:root[data-theme="pastel"] #prompt { --tb: #f25ca2 !important; font-size: 22px; font-weight: 400; }
+:root[data-theme="pastel"] #moves::before { content: "Move_list.log" !important; grid-column: 1 / -1; position: sticky; top: 0; z-index: 1; margin-bottom: 4px; }
+:root[data-theme="pastel"] #moves { --tb: #ffc21a !important; }
+:root[data-theme="pastel"] #info::before { content: "Coach_says.txt" !important; }
+:root[data-theme="pastel"] .weak { --tb: #f25ca2 !important; }
+:root[data-theme="pastel"] .weak::before { content: "Weak_spots.txt" !important; }
+:root[data-theme="pastel"] .chart-card::before { content: "Graph.bmp" !important; }
+:root[data-theme="pastel"] .chart-card:nth-child(3n+2) { --tb: #f25ca2 !important; }
+:root[data-theme="pastel"] .chart-card:nth-child(3n+2)::before { content: "Oops_chart.png" !important; }
+:root[data-theme="pastel"] .chart-card:nth-child(3n+3) { --tb: #ffc21a !important; }
+:root[data-theme="pastel"] .chart-card:nth-child(3n+3)::before { content: "Do_not_open.xls" !important; }
+:root[data-theme="pastel"] .train-done { --tb: #ffc21a !important; }
+:root[data-theme="pastel"] .train-done::before { content: "Well_done.txt"; }
+:root[data-theme="pastel"] #status { --tb: #f25ca2; }
+:root[data-theme="pastel"] #status::before { content: "Oops.txt"; }
+:root[data-theme="pastel"] #status:not([hidden]) { display: block; }
+:root[data-theme="pastel"] #info { min-height: 76px; }
+:root[data-theme="pastel"] .weak h2, :root[data-theme="pastel"] .chart-card h2 { font-size: 22px; font-weight: 400; }
+:root[data-theme="pastel"] #result:not(:empty) { background: #fff; border: 3px solid #2a1a5e; padding: 6px 10px; box-shadow: 3px 3px 0 #2a1a5e; margin-bottom: 10px; }
+:root[data-theme="pastel"] #result p:last-child { margin-bottom: 0; }
+
+/* Table */
+:root[data-theme="pastel"] main, :root[data-theme="dos"] main { max-width: 1240px; }
+:root[data-theme="pastel"] :is(th, td), :root[data-theme="dos"] :is(th, td) { padding: 6px 8px; }
+:root[data-theme="pastel"] th { font-size: 16px; font-weight: 400; background: #ffe9a8; color: #2a1a5e; border-bottom: 3px solid #2a1a5e; }
+:root[data-theme="pastel"] td { border-bottom: 2px solid #cdb9fa; }
+:root[data-theme="pastel"] td.opening { color: #3d2d78; }
+:root[data-theme="pastel"] .win, :root[data-theme="pastel"] .loss, :root[data-theme="pastel"] .draw { font-weight: 400; }
+
+/* Review: move list, eval bar, graph, board frames */
+:root[data-theme="pastel"] #moves button { border: 0; box-shadow: none; background: none; border-radius: 0; min-height: 0; color: inherit; }
+:root[data-theme="pastel"] #moves button.inaccuracy { color: #876100; }
+:root[data-theme="pastel"] #moves button.mistake { color: #b34700; }
+:root[data-theme="pastel"] #moves button.blunder { color: #b3206a; }
+:root[data-theme="pastel"] #moves button:hover { background: #ffe9a8; }
+:root[data-theme="pastel"] #moves button:active { transform: none; }
+:root[data-theme="pastel"] #moves button.active { background: #5b35c9; color: #fff; }
+:root[data-theme="pastel"] #board, :root[data-theme="pastel"] #bar, :root[data-theme="pastel"] #graph { outline: 3px solid #2a1a5e; box-shadow: 6px 6px 0 #2a1a5e; }
+:root[data-theme="pastel"] #bar { border: 0; border-radius: 0; }
+:root[data-theme="pastel"] #graph { border: 0; border-radius: 0; margin-bottom: 8px; }
+:root[data-theme="pastel"] #eval-text { font-weight: 400; font-size: 30px; }
+:root[data-theme="pastel"] .controls button { min-height: 38px; }
+
+/* Board */
+:root[data-theme="pastel"] cg-board {
+  background-color: #fff3c4;
+  background-image: conic-gradient(#fff3c4 25%, #ffb21a 0 50%, #fff3c4 0 75%, #ffb21a 0);
+  background-size: 25% 25%;
+}
+:root[data-theme="pastel"] cg-board square.last-move { background-color: rgba(242, 92, 162, 0.5); }
+:root[data-theme="pastel"] cg-board square.selected { background-color: rgba(62, 203, 240, 0.7); }
+
+/* ====================================================================
+   WINDOWS 95 STYLE
+   ==================================================================== */
+:root[data-theme="win95"] {
+  --bg: #008080;
+  --surface: #c0c0c0;
+  --text: #000000;
+  --muted: #404040;
+  --line: #808080;
+  --accent: #000080;
+  --win: #004d00;
+  --loss: #a00000;
+  --draw: #4a4a00;
+  --inaccuracy: #5a4400;
+  --mistake: #7a3300;
+  --blunder: #a00000;
+}
+:root[data-theme="win95"] body { background: #008080; font: 14px/1.4 Tahoma, "MS Sans Serif", Arial, sans-serif; }
+:root[data-theme="win95"] :focus-visible { outline: 2px dotted #000; outline-offset: 2px; }
+:root[data-theme="win95"] header { background: #000080; color: #fff; border-bottom: 2px solid #fff; align-items: center; }
+:root[data-theme="win95"] header :focus-visible { outline-color: #fff; }
+:root[data-theme="win95"] header h1 { font-size: 16px; font-weight: 700; color: #fff; }
+:root[data-theme="win95"] nav { flex-wrap: wrap; gap: 4px 8px; }
+:root[data-theme="win95"] nav a { color: #fff; padding: 3px 10px; border: 2px solid transparent; }
+:root[data-theme="win95"] nav a:hover { text-decoration: underline; }
+:root[data-theme="win95"] nav a.active { background: #c0c0c0; color: #000; border: 2px solid; border-color: #fff #404040 #404040 #fff; }
+:root[data-theme="win95"] .theme-picker { margin-left: auto; color: #fff; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+:root[data-theme="win95"] main {
+  width: calc(100% - 24px);
+  margin: 12px auto;
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #404040 #404040 #fff;
+  box-shadow: 1px 1px 0 #000;
+}
+:root[data-theme="win95"] a { color: #000080; }
+
+:root[data-theme="win95"] select,
+:root[data-theme="win95"] button {
+  background: #c0c0c0;
+  color: #000;
+  border: 2px solid; border-color: #fff #404040 #404040 #fff;
+  border-radius: 0;
+  box-shadow: inset -1px -1px 0 #808080;
+  min-height: 36px;
+}
+:root[data-theme="win95"] button:active { border-color: #404040 #fff #fff #404040; box-shadow: inset 1px 1px 0 #808080; }
+:root[data-theme="win95"] select { background: #fff; border-color: #808080 #fff #fff #808080; box-shadow: inset 1px 1px 0 #404040; }
+:root[data-theme="win95"] .controls button, :root[data-theme="win95"] #more { font-weight: 700; }
+
+/* Sunken areas */
+:root[data-theme="win95"] .table-wrap,
+:root[data-theme="win95"] #moves,
+:root[data-theme="win95"] .train-done,
+:root[data-theme="win95"] #info {
+  background: #fff;
+  border: 2px solid; border-color: #808080 #fff #fff #808080;
+  border-radius: 0;
+  box-shadow: inset 1px 1px 0 #404040;
+}
+:root[data-theme="win95"] #info { padding: 6px 8px; }
+:root[data-theme="win95"] th { background: #c0c0c0; color: #000; border: 2px solid; border-color: #fff #404040 #404040 #fff; font-size: 12px; }
+:root[data-theme="win95"] td { border-bottom: 1px solid #c0c0c0; }
+:root[data-theme="win95"] td.opening { color: #404040; }
+:root[data-theme="win95"] #board, :root[data-theme="win95"] #graph {
+  outline: 2px solid #808080; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #404040;
+}
+:root[data-theme="win95"] #bar { border: 2px solid; border-color: #808080 #fff #fff #808080; border-radius: 0; }
+:root[data-theme="win95"] #graph { border: 0; border-radius: 0; margin-bottom: 8px; }
+:root[data-theme="win95"] #moves button { border: 0; background: none; box-shadow: none; border-radius: 0; min-height: 0; color: inherit; }
+:root[data-theme="win95"] #moves button.inaccuracy { color: #5a4400; }
+:root[data-theme="win95"] #moves button.mistake { color: #7a3300; }
+:root[data-theme="win95"] #moves button.blunder { color: #a00000; }
+:root[data-theme="win95"] #moves button:hover { background: #e8e8e8; }
+:root[data-theme="win95"] #moves button.active { background: #000080; color: #fff; }
+:root[data-theme="win95"] #prompt { font-weight: 700; font-size: 15px; }
+:root[data-theme="win95"] #eval-text { font-size: 20px; }
+:root[data-theme="win95"] #status { background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; }
+
+/* Cards with navy title bars */
+:root[data-theme="win95"] .weak,
+:root[data-theme="win95"] .chart-card {
+  background: #c0c0c0;
+  border: 2px solid; border-color: #fff #404040 #404040 #fff;
+  box-shadow: 1px 1px 0 #000;
+  border-radius: 0;
+  padding-top: 0;
+}
+:root[data-theme="win95"] .weak::before, :root[data-theme="win95"] .chart-card::before {
+  display: block;
+  margin: 0 -16px 10px;
+  padding: 2px 8px;
+  background: #000080;
+  color: #fff;
+  font-weight: 700;
+}
+:root[data-theme="win95"] .weak::before { content: "Weaknesses"; }
+:root[data-theme="win95"] .chart-card::before { content: "Chart"; }
+:root[data-theme="win95"] .chart-box { background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 4px; }
+:root[data-theme="win95"] .weak h2, :root[data-theme="win95"] .chart-card h2 { font-size: 14px; }
+
+/* Board */
+:root[data-theme="win95"] cg-board {
+  background-color: #fff;
+  background-image: conic-gradient(#fff 25%, #808080 0 50%, #fff 0 75%, #808080 0);
+  background-size: 25% 25%;
+}
+:root[data-theme="win95"] cg-board square.last-move { background-color: rgba(255, 230, 0, 0.55); }
+:root[data-theme="win95"] cg-board square.selected { background-color: rgba(0, 0, 128, 0.5); }
+
+/* ====================================================================
+   DOS STYLE (CHESS.EXE)
+   ==================================================================== */
+:root[data-theme="dos"] {
+  --bg: #0000aa;
+  --surface: #0000aa;
+  --text: #ffffff;
+  --muted: #d0d0d0;
+  --line: #ffffff;
+  --accent: #ffff55;
+  --win: #55ff55;
+  --loss: #ff8080;
+  --draw: #55ffff;
+  --inaccuracy: #ffff55;
+  --mistake: #ffaa55;
+  --blunder: #ff7777;
+}
+:root[data-theme="dos"] body {
+  background: #0000aa;
+  font: 22px/1.1 "VT323", "Courier New", monospace;
+  padding-bottom: 44px; /* room for the function-key bar */
+}
+/* Decorative function-key bar fixed to the bottom of the viewport */
+:root[data-theme="dos"] body::after {
+  content: "1Help 2Games 3Review 4Train 5Stats 6Blunder 7Cry 8Retry 9Rage 10Quit";
+  position: fixed; left: 0; right: 0; bottom: 0;
+  height: 36px; line-height: 28px;
+  padding: 4px 8px;
+  background: #00aaaa; color: #000;
+  white-space: nowrap; overflow: hidden;
+  pointer-events: none;
+  z-index: 10;
+}
+:root[data-theme="dos"] :focus-visible { outline: 2px solid #ffff55; outline-offset: 2px; }
+:root[data-theme="dos"] header :focus-visible { outline-color: #000; }
+:root[data-theme="dos"] header { background: #00aaaa; color: #000; border-bottom: 4px double #fff; align-items: center; }
+:root[data-theme="dos"] header h1 { font-size: 26px; font-weight: 400; text-transform: uppercase; color: #000; }
+:root[data-theme="dos"] nav { flex-wrap: wrap; gap: 4px 8px; }
+:root[data-theme="dos"] nav a { color: #000; padding: 0 8px; border: 0; }
+:root[data-theme="dos"] nav a:hover { text-decoration: underline; }
+:root[data-theme="dos"] nav a.active { background: #000; color: #ffff55; border: 0; }
+:root[data-theme="dos"] .theme-picker { margin-left: auto; color: #000; display: flex; align-items: center; gap: 6px; }
+:root[data-theme="dos"] a { color: #ffff55; }
+
+:root[data-theme="dos"] select,
+:root[data-theme="dos"] button {
+  background: #aaaaaa;
+  color: #000;
+  border: 2px solid #fff;
+  border-radius: 0;
+  box-shadow: 4px 4px 0 #000;
+  min-height: 36px;
+}
+:root[data-theme="dos"] button:hover { background: #fff; }
+:root[data-theme="dos"] button:active { transform: translate(4px, 4px); box-shadow: none; }
+
+:root[data-theme="dos"] .table-wrap,
+:root[data-theme="dos"] #moves,
+:root[data-theme="dos"] .weak,
+:root[data-theme="dos"] .chart-card,
+:root[data-theme="dos"] .train-done,
+:root[data-theme="dos"] #info,
+:root[data-theme="dos"] #status {
+  background: #0000aa;
+  border: 4px double #fff;
+  border-radius: 0;
+}
+:root[data-theme="dos"] #info { padding: 6px 10px; }
+:root[data-theme="dos"] th { font-size: 18px; font-weight: 400; color: #ffff55; border-bottom: 2px solid #fff; }
+:root[data-theme="dos"] td { border-bottom: 0; }
+:root[data-theme="dos"] .weak h2, :root[data-theme="dos"] .chart-card h2, :root[data-theme="dos"] #prompt,
+:root[data-theme="dos"] .game-head h2 { color: #ffff55; font-weight: 400; font-size: 24px; text-transform: uppercase; }
+:root[data-theme="dos"] #prompt { font-size: 24px; }
+:root[data-theme="dos"] #eval-text { color: #ffff55; font-weight: 400; font-size: 30px; }
+:root[data-theme="dos"] .win, :root[data-theme="dos"] .loss, :root[data-theme="dos"] .draw { font-weight: 400; }
+:root[data-theme="dos"] #moves button { border: 0; background: none; box-shadow: none; min-height: 0; color: inherit; }
+:root[data-theme="dos"] #moves button.inaccuracy { color: #ffff55; }
+:root[data-theme="dos"] #moves button.mistake { color: #ffaa55; }
+:root[data-theme="dos"] #moves button.blunder { color: #ff7777; }
+:root[data-theme="dos"] #moves button:hover { background: #000066; text-decoration: underline; }
+:root[data-theme="dos"] #moves button:active { transform: none; }
+:root[data-theme="dos"] #moves button.active { background: #ffff55; color: #0000aa; }
+:root[data-theme="dos"] #board, :root[data-theme="dos"] #graph { outline: 4px double #fff; outline-offset: 2px; }
+:root[data-theme="dos"] #bar { border: 2px solid #fff; border-radius: 0; }
+:root[data-theme="dos"] #graph { border: 0; border-radius: 0; margin-bottom: 8px; }
+
+/* Board */
+:root[data-theme="dos"] cg-board {
+  background-color: #aaaaaa;
+  background-image: conic-gradient(#aaaaaa 25%, #00aaaa 0 50%, #aaaaaa 0 75%, #00aaaa 0);
+  background-size: 25% 25%;
+}
+:root[data-theme="dos"] cg-board square.last-move { background-color: rgba(255, 255, 85, 0.6); }
+:root[data-theme="dos"] cg-board square.selected { background-color: rgba(0, 0, 170, 0.6); }
+:root[data-theme="dos"] cg-board square.move-dest { background: radial-gradient(rgba(0, 0, 0, 0.55) 22%, rgba(0, 0, 0, 0) 0); }
+:root[data-theme="dos"] cg-board square.oc.move-dest { background: radial-gradient(transparent 0%, transparent 80%, rgba(0, 0, 0, 0.5) 80%); }
