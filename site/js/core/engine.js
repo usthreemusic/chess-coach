@@ -13,6 +13,7 @@ const INIT_TIMEOUT_MS = 30000;
 export function parseInfo(line) {
   if (typeof line !== "string" || !line.startsWith("info ")) return null;
   const t = line.trim().split(/\s+/);
+  if (t[1] === "string") return null; // free text, not a search line
   let depth = null, multipv = 1, cp = null, mate = null, pv = null, scored = false;
   for (let i = 1; i < t.length; i++) {
     const k = t[i];

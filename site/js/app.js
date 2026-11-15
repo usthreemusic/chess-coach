@@ -1,6 +1,6 @@
 // Shared app shell: username gate, player chip, sync status strip and refresh helper.
 // Page scripts do `const user = await ready;` and simply never start while the gate is showing.
-import { currentUser, setUser, clearUser, onDataChanged, monthsBack, setMonthsBack } from "./core/data.js";
+import { currentUser, setUser, clearUser, onDataChanged, monthsBack, setMonthsBack, syncStatus } from "./core/data.js";
 import { CONFIG, MONTH_CHOICES } from "./core/config.js";
 import { startSync } from "./core/sync.js";
 
@@ -38,6 +38,17 @@ export function onRefresh(cb, minIntervalMs = 5000) {
     timer = setTimeout(run, Math.max(0, last + minIntervalMs - Date.now()));
   });
   return () => { off(); if (timer) { clearTimeout(timer); timer = null; } };
+}
+
+/**
+ * Why a page has no games to show, as text, or null while they may still be on the way.
+ * Call it only when the player has no games in the chosen window.
+ */
+export function noGamesText() {
+  const status = syncStatus();
+  if (status.fetched) return `No games in the last ${monthsBack()} months. Choose a longer window in the header to look further back.`;
+  if (status.error) return "Could not fetch your games.";
+  return null;
 }
 
 function switchPlayer() {
@@ -135,7 +146,6 @@ function addStrip() {
 
 function runSync(user, strip) {
   let handle = null;
-  let sawBusy = false;
   const text = el("span", "sync-text");
   const bar = el("progress");
   const action = el("button", "sync-action");
@@ -151,17 +161,15 @@ function runSync(user, strip) {
 
   const onProgress = (p) => {
     if (p.phase === "fetch") {
-      sawBusy = false;
       if (p.total > 0) show(`Fetching games… ${p.done} of ${p.total} months`, { progress: p });
       else show("Fetching games…");
     } else if (p.phase === "analyse") {
       if (p.total > 0) show(`Analysing games… ${p.done} of ${p.total}`, { progress: p });
       else strip.hidden = true;
     } else if (p.phase === "busy") {
-      sawBusy = true;
-      show("Analysing in another tab");
+      show(p.message || "Waiting for another tab to finish analysing");
     } else if (p.phase === "done") {
-      if (sawBusy) show("Analysing in another tab"); else strip.hidden = true;
+      strip.hidden = true;
     } else if (p.phase === "error") {
       const notFound = p.error && p.error.code === "not_found";
       if (notFound) show(p.message || "No chess.com player called " + user, { button: { label: "Try another name", run: switchPlayer } });
@@ -171,7 +179,6 @@ function runSync(user, strip) {
 
   function start() {
     if (handle) handle.stop();
-    sawBusy = false;
     show("Fetching games…");
     handle = startSync(user, { onProgress });
   }

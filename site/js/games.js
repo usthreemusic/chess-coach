@@ -1,4 +1,4 @@
-import { ready, onRefresh } from "./app.js";
+import { ready, onRefresh, noGamesText } from "./app.js";
 import { loadGames } from "./core/data.js";
 
 const PAGE = 200;
@@ -6,10 +6,12 @@ const $ = (id) => document.getElementById(id);
 let games = [];
 let shown = PAGE;
 
-function cell(row, text, className) {
+// label: shown before the value when the table is stacked into cards on phones (see themes.css)
+function cell(row, text, className, label) {
   const td = row.insertCell();
   td.textContent = text;
   if (className) td.className = className;
+  if (label) td.dataset.label = label;
   return td;
 }
 
@@ -40,10 +42,10 @@ function render() {
     dot.className = `piece ${g.colour}`;
     dot.title = `Played ${g.colour}`;
     res.append(dot, `${g.result} (${g.result_detail})`);
-    cell(row, `${g.opponent} (${g.opponent_rating ?? "?"})`);
-    cell(row, g.my_rating ?? "", "num");
+    cell(row, `${g.opponent} (${g.opponent_rating ?? "?"})`, "", "vs");
+    cell(row, g.my_rating ?? "", "num", "Rating");
     cell(row, g.opening, "opening");
-    const mistakes = cell(row, g.mistakes ? "" : "—", "num");
+    const mistakes = cell(row, g.mistakes ? "" : "—", "num", "?! / ? / ??");
     if (g.mistakes) {
       for (const kind of ["inaccuracy", "mistake", "blunder"]) {
         const span = document.createElement("span");
@@ -82,7 +84,7 @@ async function refresh() {
   games = data.games;
   fillClassOptions();
   if (!games.length) {
-    $("summary").textContent = "Fetching your games from chess.com…";
+    $("summary").textContent = noGamesText() || "Fetching your games from chess.com…";
     $("rows").replaceChildren();
     $("empty").hidden = true;
     $("more").hidden = true;

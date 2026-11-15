@@ -1,5 +1,5 @@
-import { ready, onRefresh } from "./app.js";
-import { loadPuzzles as loadDataPuzzles, loadStats } from "./core/data.js";
+import { ready, onRefresh, noGamesText } from "./app.js";
+import { loadPuzzles as loadDataPuzzles, loadStats, loadGames, syncStatus } from "./core/data.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -205,6 +205,17 @@ const valueLabels = {
   },
 };
 
+// On phones (600px and below) long category labels wrap onto several lines instead of being clipped.
+function wrapLabel(text, max) {
+  const lines = [];
+  let line = "";
+  for (const word of String(text).split(" ")) {
+    if (line && (line + " " + word).length > max) { lines.push(line); line = word; } else line = line ? line + " " + word : word;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
 const charts = [];
 let tagCard = null; // the Mistake type card, which the panel is inserted after
 const tagLabel = (key) => MISTAKE_TYPE_LABELS[key] || cap(key);
@@ -259,7 +270,15 @@ function barChart(canvas, rows, labels, colours, count = false, onClick = null) 
         y: {
           grid: { display: false },
           border: { color: colours.line },
-          ticks: { color: colours.text, font: { size: 13 } },
+          ticks: {
+            color: colours.text,
+            font: { size: 13 },
+            autoSkip: false,
+            callback(value) {
+              const label = this.getLabelForValue(value);
+              return window.matchMedia("(max-width: 600px)").matches ? wrapLabel(label, 13) : label;
+            },
+          },
         },
       },
       plugins: {
@@ -488,7 +507,7 @@ function renderCharts() {
     const rows = barRows(dim);
     if (!rows.length) continue;
     const note = dim === "opening" ? `Families with at least ${MIN_OPENING_GAMES} games, up to ${MAX_OPENINGS}.` : "";
-    const canvas = addCard(host, title, note, Math.max(120, rows.length * 36 + 60), false,
+    const canvas = addCard(host, title, note, Math.max(120, rows.length * (window.matchMedia("(max-width: 600px)").matches ? 50 : 36) + 60), false,
       rows.some((b) => b.moves < MIN_MOVES) ? "bar" : null);
     charts.push(barChart(canvas, rows, rows.map((b) => cap(b.key)), colours));
   }
@@ -526,6 +545,9 @@ async function refresh() {
   const next = await loadStats();
   if (!next || !next.moves) {
     data = null;
+    const { games } = await loadGames();
+    if (!games.length) return showStatus(noGamesText() || "Fetching your games from chess.com…");
+    if (syncStatus().done) return showStatus("No analysed games are available yet.");
     return showStatus("Analysing your games — stats appear as soon as the first game is done.");
   }
   data = next;

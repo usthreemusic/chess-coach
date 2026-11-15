@@ -15,7 +15,9 @@ const PRESSURE_OK = "10% or more";
 /** Base time in seconds from "600", "180+2" or "1/86400"; null if not live. */
 export function baseSeconds(timeControl) {
   if (typeof timeControl !== "string" || timeControl.includes("/")) return null;
-  const n = Number(timeControl.split("+")[0].trim());
+  const base = timeControl.split("+")[0].trim();
+  if (!base) return null;
+  const n = Number(base);
   return Number.isNaN(n) ? null : n;
 }
 

@@ -36,7 +36,7 @@ function headersOf(pgn) {
 /** Reduce a chess.com API game to the fields we keep. null if unusable. */
 export function normaliseGame(raw, username) {
   const pgn = raw.pgn;
-  if (!pgn || raw.rules !== "chess") return null;
+  if (!pgn || raw.rules !== "chess" || !raw.white || !raw.black) return null;
   if (pgn.includes('[SetUp "1"]')) return null; // custom starting position
   const user = String(username).toLowerCase();
   const colour = String(raw.white.username).toLowerCase() === user ? "white" : "black";

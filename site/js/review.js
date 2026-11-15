@@ -55,7 +55,7 @@ function show(i) {
     lastMove: move ? [move.uci.slice(0, 2), move.uci.slice(2, 4)] : undefined,
   });
   board.setAutoShapes(
-    move && move.class
+    move && move.class && move.best_uci
       ? [{ orig: move.best_uci.slice(0, 2), dest: move.best_uci.slice(2, 4), brush: "green" }]
       : []
   );
@@ -77,8 +77,8 @@ function show(i) {
       head.append(" · ", el("span", `tag ${move.class}`, `${LABEL[move.class]} (−${(move.drop / 100).toFixed(1)})`));
     }
     info.append(head);
-    if (move.class) {
-      const rest = move.pv.slice(1).join(" ");
+    if (move.class && move.best) {
+      const rest = (move.pv || []).slice(1).join(" ");
       info.append(el("p", "", `Best was ${move.best}${rest ? `, then ${rest}` : ""}.`));
     }
     if (move.clk !== undefined && game.time_class !== "daily") {
@@ -218,6 +218,8 @@ function mount(chosen, loaded, analysed) {
     }
   };
   document.addEventListener("keydown", (event) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return;
+    if (event.target.closest && event.target.closest("input, select, textarea")) return; // keys those controls use
     const step = { ArrowLeft: idx - 1, ArrowRight: idx + 1, Home: 0, End: analysis.moves.length }[event.key];
     if (step !== undefined) {
       event.preventDefault();

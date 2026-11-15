@@ -8,20 +8,32 @@ import { monthsBackFor, setMonthsBackFor, windowStart } from "./config.js";
 const USER_KEY = "chess-coach-user";
 const CHANNEL = "chess-coach";
 
+// The player is pinned per tab: read once, so another tab switching player cannot change this one.
+const clean = (v) => (v ? v.trim().toLowerCase() || null : null);
+function readStoredUser() {
+  try { const v = clean(sessionStorage.getItem(USER_KEY)); if (v) return v; } catch (e) { /* no sessionStorage */ }
+  try { return clean(localStorage.getItem(USER_KEY)); } catch (e) { return null; }
+}
+let pinned = readStoredUser();
+
 export function currentUser() {
-  try {
-    const v = localStorage.getItem(USER_KEY);
-    return v ? v.trim().toLowerCase() || null : null;
-  } catch (e) { return null; }
+  return pinned;
 }
 export function setUser(name) {
   const v = String(name || "").trim().toLowerCase();
-  try { if (v) localStorage.setItem(USER_KEY, v); } catch (e) { /* private mode */ }
+  if (v) {
+    let saved = false;
+    try { localStorage.setItem(USER_KEY, v); saved = true; } catch (e) { /* private mode */ }
+    try { sessionStorage.setItem(USER_KEY, v); } catch (e) { /* no sessionStorage */ }
+    if (saved) pinned = v; // callers detect blocked storage by checking currentUser() afterwards
+  }
   invalidate();
   return v || null;
 }
 export function clearUser() {
   try { localStorage.removeItem(USER_KEY); } catch (e) { /* ignore */ }
+  try { sessionStorage.removeItem(USER_KEY); } catch (e) { /* ignore */ }
+  pinned = null;
   invalidate();
 }
 
@@ -92,7 +104,10 @@ export function loadPuzzles() {
   return memo("puzzles", async () => {
     const pairs = await loadPairs();
     const puzzles = [];
-    for (const { game, analysis } of pairs) puzzles.push(...buildPuzzles(game, analysis));
+    for (const { game, analysis } of pairs) {
+      try { puzzles.push(...buildPuzzles(game, analysis)); }
+      catch (e) { console.error("Skipping puzzles for game " + game.id, e); } // one unreadable analysis
+    }
     puzzles.sort((a, b) => (a.end_time - b.end_time) || (a.ply - b.ply));
     return { puzzles };
   });
@@ -123,7 +138,19 @@ let ownChannel = null;
 try { if (typeof BroadcastChannel !== "undefined") ownChannel = new BroadcastChannel(CHANNEL); } catch (e) { ownChannel = null; }
 const subscribers = new Set();
 
+const syncStatuses = new Map(); // username -> latest { type: "sync" } message
+const NO_SYNC = { fetched: false, done: false, error: null };
+
+/** Latest sync status for the current player: { fetched, done, error }. */
+export function syncStatus() {
+  const m = pinned && syncStatuses.get(pinned);
+  return m ? { fetched: Boolean(m.fetched), done: Boolean(m.done), error: m.error ?? null } : { ...NO_SYNC };
+}
+
 function onRaw(detail) {
+  if (detail && detail.type === "sync" && typeof detail.username === "string") syncStatuses.set(detail.username, detail);
+  // Messages about another player (another tab switched user) are not ours.
+  if (detail && detail.username && detail.username !== pinned) return;
   invalidate();
   for (const s of subscribers) s(detail);
 }

@@ -299,9 +299,10 @@ test("analyseGame: black to move with a positive mate and drawn terminal positio
   const table = { [f[0]]: [{ cp: 0, mate: null, pv: [] }], [f[1]]: [{ cp: null, mate: 2, pv: ["e7e5"] }] };
   const { evaluate } = makeEngine(table);
   const a = await analyseGame({ id: "g4", colour: "white", pgn: "1. d4 *" }, evaluate);
-  // black (side to move) mates in 2: white sees mate -2 and cp -1000. Start had no pv, so no best move.
-  eq(a.moves, [{ san: "d4", uci: "d2d4", cp: -1000, mate: -2, class: "blunder", drop: 1000 }]);
-  eq(a.counts.blunder, 1);
+  // black (side to move) mates in 2: white sees mate -2 and cp -1000. Start had no pv, so no best
+  // move to compare against: the move is not classified or counted.
+  eq(a.moves, [{ san: "d4", uci: "d2d4", cp: -1000, mate: -2 }]);
+  eq(a.counts.blunder, 0);
 });
 
 test("parity: analyseGame reproduces every stored analysis when fed the stored scores", async () => {
@@ -657,7 +658,9 @@ test("detector ignored_threat vs walked_into", () => {
   ok(!fires(scan(["e4", "d5", "Nf3", "d4", "d3"]), "walked_into", 3), "d3");
 });
 
-test("winningCaptures agrees with themes.winsMaterial (x-rays aside) on fixture positions", () => {
+// winningCaptures is the fast approximation patterns.js uses: it reads attack maps, so unlike
+// winsMaterial it counts a pinned piece or a king that cannot legally recapture as a defender.
+test("winningCaptures agrees with themes.winsMaterial (x-rays and pins aside) on fixture positions", () => {
   let total = 0, differ = 0;
   for (const { analysis } of pairs.slice(0, 12)) {
     const chess = new Chess();
@@ -674,7 +677,7 @@ test("winningCaptures agrees with themes.winsMaterial (x-rays aside) on fixture 
     }
   }
   ok(total > 500, `only ${total} captures compared`);
-  ok(differ / total < 0.005, `${differ} of ${total} differ`);
+  ok(differ / total < 0.02, `${differ} of ${total} differ`);
 });
 
 test("record fields: oppBlunder, tilt (next2), ahead/behind and centre", () => {

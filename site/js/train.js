@@ -1,7 +1,7 @@
 import { Chessground } from "../vendor/chessground.min.js";
 import { Chess } from "../vendor/chess.js";
-import { ready, onRefresh } from "./app.js";
-import { loadPuzzles, loadThemed } from "./core/data.js";
+import { ready, onRefresh, noGamesText } from "./app.js";
+import { loadPuzzles, loadThemed, loadGames, syncStatus } from "./core/data.js";
 import { phaseOf } from "./core/chessutil.js";
 import { explainLine } from "./core/explain.js";
 import { checklistFor } from "./core/coach.js";
@@ -71,21 +71,46 @@ let scored, hinted, outcome;
 
 const isThemed = () => filters.mode === "themed";
 
+// Keep only entries shaped like { box: 1-5, due: number }: anything else would make a puzzle unreachable.
 function loadState() {
+  const clean = {};
   try {
     const parsed = JSON.parse(localStorage.getItem(STORE_KEY));
-    return parsed && typeof parsed === "object" ? parsed : {};
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return clean;
+    for (const [key, entry] of Object.entries(parsed)) {
+      if (entry && Number.isInteger(entry.box) && entry.box >= 1 && entry.box <= 5 && Number.isFinite(entry.due)) {
+        clean[key] = { box: entry.box, due: entry.due };
+      }
+    }
   } catch (err) {
-    return {};
+    // unreadable or unavailable: start empty
   }
+  return clean;
 }
 
-function saveState() {
+// Another tab may have saved since this one loaded, so merge into what is stored. `key` is the
+// puzzle just recorded: this tab's entry wins for it, the stored entry wins for the rest.
+// Without a key (an import) the entry with the later due date wins.
+function saveState(key) {
+  const stored = loadState();
+  for (const [id, entry] of Object.entries(state)) {
+    if (id === key || !stored[id] || (key === undefined && entry.due > stored[id].due)) stored[id] = entry;
+  }
+  state = stored;
   try {
     localStorage.setItem(STORE_KEY, JSON.stringify(state));
   } catch (err) {
     // storage unavailable: progress lasts for this visit only
   }
+}
+
+// Another tab saved progress: take it in and refresh the counts (and the queue if nothing is on the board).
+function onStorage(event) {
+  if (event.key !== STORE_KEY) return;
+  state = loadState();
+  if (!puzzles.length && !themed) return;
+  updateCounts();
+  if (!current) advance();
 }
 
 function loadFilters() {
@@ -188,7 +213,7 @@ function record(puzzle, result) {
   const box = state[puzzle.key]?.box ?? 1;
   const next = result === "up" ? Math.min(5, box + 1) : result === "same" ? box : 1;
   state[puzzle.key] = { box: next, due: Date.now() + INTERVAL_DAYS[next] * DAY };
-  saveState();
+  saveState(puzzle.key);
 }
 
 function dueList() {
@@ -336,11 +361,13 @@ function scoreNote() {
   return "This puzzle goes back to the start and comes round again soon.";
 }
 
-function finish(solved, altSan) {
+function finish(solved, altSan, mate) {
   answered = true;
   playToken++; // cancel a pending opponent reply
   clearWrong();
-  score(!solved ? "down" : hinted ? "same" : "up");
+  // The first move decides the box: revealing a later move of my own game's puzzle does not demote it.
+  score(!solved && scores() ? "down" : hinted ? "same" : "up");
+  closePicker();
   for (const id of ["show-answer", "hint"]) {
     $(id).hidden = true;
     $(id).disabled = false;
@@ -354,7 +381,9 @@ function finish(solved, altSan) {
   const rest = sanFrom(chess, fullLine.slice(step));
   if (solved) {
     board.set({ movable: { color: undefined } });
-    if (altSan) {
+    if (mate) {
+      say(el("p", "solved", `Solved! ${mate} is also checkmate.`));
+    } else if (altSan) {
       say(
         el("p", "solved", `Solved! ${altSan} is a good move.`),
         el("p", "", `The engine's first choice was ${current.best_san}.`)
@@ -459,16 +488,57 @@ function showHint() {
   say(el("p", "", `Hint: move your ${PIECE_NAMES[chess.get(from).type]} on ${from}.`));
 }
 
-function onMove(orig, dest) {
+// The promotion picker: queen, rook, bishop or knight. Escape or Cancel puts the pawn back.
+let picker = null;
+
+function closePicker() {
+  if (picker) picker.remove();
+  picker = null;
+}
+
+function openPicker(orig, dest) {
+  closePicker();
+  board.set({ movable: { color: undefined, dests: new Map() } }); // the pawn stays on the last rank meanwhile
+  const box = el("div", "promo-picker");
+  box.setAttribute("role", "group");
+  box.setAttribute("aria-label", "Promote to");
+  const cancel = () => {
+    closePicker();
+    setMovable(true);
+  };
+  for (const [piece, name] of [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]]) {
+    const btn = el("button", "", name);
+    btn.type = "button";
+    btn.onclick = () => {
+      closePicker();
+      onMove(orig, dest, piece);
+    };
+    box.append(btn);
+  }
+  const back = el("button", "promo-cancel", "Cancel");
+  back.type = "button";
+  back.onclick = cancel;
+  box.append(back);
+  box.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      cancel();
+    }
+  });
+  $("result").after(box);
+  box.firstChild.focus();
+  picker = box;
+}
+
+function onMove(orig, dest, chosen) {
   if (!current || answered) return;
   const expected = line[step];
   const move = chess.moves({ verbose: true }).find((m) => m.from === orig && m.to === dest);
   if (!move) return wrong(null);
   // Other good first moves (within 50 cp of the best) are accepted in puzzles from my games.
   const alts = !isThemed() && step === 0 ? current.alts || [] : [];
-  // Promote to an accepted answer's piece when the squares match, else to a queen.
-  const match = [expected, ...alts].find((u) => u.slice(0, 4) === orig + dest);
-  const promotion = move.promotion ? (match && match[4]) || "q" : undefined;
+  if (move.promotion && !chosen) return openPicker(orig, dest);
+  const promotion = move.promotion ? chosen : undefined;
   const uci = orig + dest + (promotion || "");
   const after = new Chess(chess.fen());
   const san = play(after, uci).san;
@@ -482,7 +552,8 @@ function onMove(orig, dest) {
   setGood(true);
   board.setAutoShapes([]);
   setMovable(false);
-  if (uci !== expected) return finish(true, alt !== -1 ? current.alts_san[alt] : null);
+  if (uci !== expected && alt === -1) return finish(true, null, san);
+  if (uci !== expected) return finish(true, current.alts_san[alt]);
   if (step >= line.length || chess.isGameOver()) return finish(true);
 
   // The opponent's reply, then the player carries on.
@@ -565,6 +636,7 @@ function showPuzzle(puzzle) {
   outcome = null;
   playToken++;
   clearWrong();
+  closePicker();
   chess = new Chess(puzzle.fen);
   step = 0;
   buildLines(puzzle);
@@ -604,7 +676,7 @@ function showPuzzle(puzzle) {
   updateCounts();
 }
 
-function showDone() {
+async function showDone() {
   current = null;
   playToken++;
   $("puzzle").hidden = true;
@@ -615,7 +687,13 @@ function showDone() {
     return;
   }
   if (!isThemed() && !puzzles.length) {
-    $("done").textContent = "Analysing your games — puzzles appear as soon as the first game is done.";
+    const { games } = await loadGames();
+    if (current) return; // a puzzle arrived while waiting: leave it on the board
+    $("done").textContent = !games.length
+      ? noGamesText() || "Fetching your games from chess.com…"
+      : syncStatus().done
+        ? "No analysed games are available yet, so there are no puzzles."
+        : "Analysing your games — puzzles appear as soon as the first game is done.";
     $("done").hidden = false;
     updateCounts();
     return;
@@ -709,6 +787,7 @@ async function init() {
   migrateKey(STORE_BASE, STORE_KEY);
   migrateKey(FILTER_BASE, FILTER_KEY);
   state = loadState();
+  window.addEventListener("storage", onStorage);
   filters = loadFilters();
   if (filters.mode !== "themed") filters.mode = "games";
   // ?tag=<mistake type> overrides the saved filter; unknown values are ignored
@@ -718,7 +797,7 @@ async function init() {
   board = Chessground($("board"), {
     coordinates: true,
     drawable: { enabled: false, visible: true },
-    movable: { free: false, showDests: false, events: { after: onMove } },
+    movable: { free: false, showDests: false, events: { after: (orig, dest) => onMove(orig, dest) } },
   });
 
   $("show-answer").onclick = () => {
