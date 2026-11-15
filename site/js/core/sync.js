@@ -16,7 +16,7 @@ const failedThisSession = new Set();   // "user:id" of games whose analysis thre
 /** "YYYY-MM" of a month-archive URL, or null. */
 export function monthOfUrl(url) {
   const m = /\/(\d{4})\/(\d{2})\/?$/.exec(String(url));
-  return m ? m[1] + "-" + m[2] : null;
+  return m && m[2] >= "01" && m[2] <= "12" ? m[1] + "-" + m[2] : null;
 }
 
 /** "YYYY-MM" of a Date in UTC, shifted by `delta` months. */
@@ -84,7 +84,7 @@ async function loadSeedAnalysis(id) {
 }
 
 function errorMessage(e, username) {
-  if (e && e.code === "not_found") return "No chess.com player called " + username;
+  if (e && e.code === "not_found") return username ? "No chess.com player called " + username : "Enter a chess.com username";
   if (e && e.code === "network") return e.message || "Could not reach chess.com";
   return "Something went wrong: " + (e && e.message ? e.message : String(e));
 }
@@ -93,6 +93,7 @@ export function startSync(username, { onProgress } = {}) {
   const user = String(username || "").trim().toLowerCase();
   let stopped = false;
   let pool = null;
+  const waiting = new AbortController(); // aborts a pending wait for the analysis lock
   const emit = (p) => { try { if (onProgress) onProgress(p); } catch (e) { console.error(e); } };
 
   async function fetchPhase() {
@@ -167,30 +168,60 @@ export function startSync(username, { onProgress } = {}) {
     }
   }
 
+  // Run fn while holding the global lock (one engine pool across all tabs). If another tab has it,
+  // say so and wait our turn; stop() abandons the wait.
+  async function withLock(fn) {
+    const locks = typeof navigator !== "undefined" ? navigator.locks : null;
+    if (!locks || !locks.request) return fn();
+    let ran = false;
+    await locks.request(LOCK_NAME, { ifAvailable: true }, async (lock) => {
+      if (!lock) return;
+      ran = true;
+      await fn();
+    });
+    if (ran || stopped) return;
+    emit({ phase: "busy", done: 0, total: 0, message: "Waiting for another tab to finish analysing" });
+    try {
+      await locks.request(LOCK_NAME, { signal: waiting.signal }, async () => { if (!stopped) await fn(); });
+    } catch (e) {
+      if (!(e && e.name === "AbortError" && waiting.signal.aborted)) throw e;
+    }
+  }
+
   async function run() {
+    let fetched = false, fetchEnded = false;
+    const syncMsg = (isDone, error) => broadcast({ type: "sync", username: user, fetched, done: isDone, error });
+    const endFetch = (error) => { if (!fetchEnded) { fetchEnded = true; syncMsg(false, error); } };
     try {
       if (!user) { const e = new Error("Enter a chess.com username"); e.code = "not_found"; throw e; }
-      await fetchPhase();
-      if (stopped) { emit({ phase: "done", done: 0, total: 0, message: "Stopped" }); return; }
-      const locks = typeof navigator !== "undefined" ? navigator.locks : null;
-      if (locks && locks.request) {
-        await locks.request(LOCK_NAME, { ifAvailable: true }, async (lock) => {
-          if (!lock) { emit({ phase: "busy", done: 0, total: 0, message: "Another tab is already analysing games" }); return; }
-          await analysePhase();
-        });
-      } else {
-        await analysePhase();
+      let fetchError = null;
+      try {
+        await fetchPhase();
+      } catch (e) {
+        if (e && e.code === "not_found") throw e;
+        console.error(e); // a failed month: still analyse the games already stored
+        fetchError = e;
       }
-      emit({ phase: "done", done: 0, total: 0, message: stopped ? "Stopped" : "Finished" });
+      fetched = !fetchError && !stopped;
+      const message = fetchError ? errorMessage(fetchError, user) : null;
+      endFetch(message);
+      if (!stopped) await withLock(analysePhase);
+      if (stopped) emit({ phase: "done", done: 0, total: 0, message: "Stopped" });
+      else if (fetchError) emit({ phase: "error", done: 0, total: 0, message, error: fetchError });
+      else emit({ phase: "done", done: 0, total: 0, message: "Finished" });
+      syncMsg(true, stopped ? null : message);
     } catch (e) {
       console.error(e);
-      emit({ phase: "error", done: 0, total: 0, message: errorMessage(e, user), error: e });
+      const message = errorMessage(e, user);
+      endFetch(message);
+      emit({ phase: "error", done: 0, total: 0, message, error: e });
+      syncMsg(true, message);
     }
   }
 
   const done = run();
   return {
     done,
-    stop() { stopped = true; if (pool) pool.terminate(); },
+    stop() { stopped = true; waiting.abort(); if (pool) pool.terminate(); },
   };
 }

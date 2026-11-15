@@ -296,9 +296,10 @@ test("analyseGame: black to move with a positive mate and drawn terminal positio
   const table = { [f[0]]: [{ cp: 0, mate: null, pv: [] }], [f[1]]: [{ cp: null, mate: 2, pv: ["e7e5"] }] };
   const { evaluate } = makeEngine(table);
   const a = await analyseGame({ id: "g4", colour: "white", pgn: "1. d4 *" }, evaluate);
-  // black (side to move) mates in 2: white sees mate -2 and cp -1000. Start had no pv, so no best move.
-  eq(a.moves, [{ san: "d4", uci: "d2d4", cp: -1000, mate: -2, class: "blunder", drop: 1000 }]);
-  eq(a.counts.blunder, 1);
+  // black (side to move) mates in 2: white sees mate -2 and cp -1000. Start had no pv, so no best
+  // move to compare against: the move is not classified or counted.
+  eq(a.moves, [{ san: "d4", uci: "d2d4", cp: -1000, mate: -2 }]);
+  eq(a.counts.blunder, 0);
 });
 
 test("parity: analyseGame reproduces every stored analysis when fed the stored scores", async () => {

@@ -48,6 +48,7 @@ export function parseMovetext(pgn) {
     }
     if (c === "(") { depth++; i++; continue; }
     if (c === ")") { depth = Math.max(0, depth - 1); i++; continue; }
+    if (c === "}") { i++; continue; } // stray closer
     let j = i;
     while (j < n && !/[\s{}();]/.test(text[j])) j++;
     let token = text.slice(i, j);
@@ -150,7 +151,8 @@ export async function analyseGame(game, evaluate, config = CONFIG) {
     if (ply.clk !== null) entry.clk = ply.clk;
 
     const drop = nz(beforeCp - cp * s);
-    const label = bestUci !== uci ? classify(drop, beforeCp, nz(cp * s), thresholds, decided) : null;
+    // No engine best move for this position: nothing to compare against, so no label.
+    const label = bestMove && bestUci !== uci ? classify(drop, beforeCp, nz(cp * s), thresholds, decided) : null;
     if (label) {
       entry.class = label;
       entry.drop = drop;

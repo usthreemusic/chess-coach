@@ -83,10 +83,11 @@ def row_to_puzzle(row, tag):
                 return None
             board.push(move)
         rating = int(row["Rating"])
-    except (ValueError, KeyError, IndexError):
+        themes = row["Themes"].split()
+    except (ValueError, KeyError, IndexError, AttributeError, TypeError):  # None fields: a short CSV line
         return None
     return {"id": row["PuzzleId"], "tag": tag, "fen": fen, "last_uci": moves[0],
-            "solution": moves[1:], "rating": rating, "themes": row["Themes"].split()}
+            "solution": moves[1:], "rating": rating, "themes": themes}
 
 
 def rows(path=CACHE):
@@ -103,11 +104,12 @@ def band_of(row):
 
 def qualifies(row, cfg):
     """The band of a row that clears the popularity and plays floors, else None."""
+    min_popularity, min_plays = cfg["min_popularity"], cfg["min_plays"]  # a missing setting is an error
     try:
-        if int(row["Popularity"]) < cfg["min_popularity"] or int(row["NbPlays"]) < cfg["min_plays"]:
+        if int(row["Popularity"]) < min_popularity or int(row["NbPlays"]) < min_plays:
             return None
         return band_of(row)
-    except (ValueError, KeyError):
+    except (ValueError, KeyError, TypeError):  # TypeError: a short CSV line leaves None fields
         return None
 
 
@@ -126,7 +128,7 @@ def select(row_iter, cfg, bands=BANDS):
         for theme in themes:
             theme_tags.setdefault(theme, []).append(tag)
     for row in row_iter:
-        hit = {t for theme in row["Themes"].split() for t in theme_tags.get(theme, ())}
+        hit = {t for theme in (row.get("Themes") or "").split() for t in theme_tags.get(theme, ())}
         if not hit:
             continue
         band = qualifies(row, cfg)

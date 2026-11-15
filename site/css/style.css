@@ -138,6 +138,9 @@ td a { color: var(--accent); }
 #result p { margin: 0 0 4px; }
 #result .solved { color: var(--win); font-weight: 600; }
 #result .failed { color: var(--loss); font-weight: 600; }
+.promo-picker { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 8px; padding: 6px; background: var(--surface); border: 1px solid var(--accent); border-radius: 8px; }
+.promo-picker button { min-height: 38px; }
+.promo-picker .promo-cancel { color: var(--muted); }
 #result .line-caption { font-variant-numeric: tabular-nums; min-height: 1.4em; }
 #result .line-caption .mine { font-weight: 700; }
 #why { margin: 0 0 12px; padding: 8px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: 8px; }

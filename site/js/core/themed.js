@@ -63,8 +63,9 @@ export function allocate(counts, total, minimum) {
 /**
  * Pick `total` puzzles from pool ({tag: [puzzle, ...]}, most-played first) in proportion to the
  * player's mistake counts per tag (at least 10% of total for any tag they make; an even split
- * when tagCounts is empty). Each tag gives puzzles from the front of its list, capped by what
- * is available; the result interleaves the tags in proportion so a mixed session mixes weaknesses.
+ * when tagCounts is empty). Each tag gives puzzles from the front of its list. When the pool is too
+ * small for the quotas, total shrinks (keeping the proportions) until it fits. The result
+ * interleaves the tags in proportion so a mixed session mixes weaknesses.
  */
 export function pickThemed(pool, tagCounts, total) {
   const available = Object.keys(pool || {}).filter((t) => Array.isArray(pool[t]) && pool[t].length);
@@ -72,7 +73,14 @@ export function pickThemed(pool, tagCounts, total) {
   const counts = {};
   for (const t of available) if ((tagCounts?.[t] || 0) > 0) counts[t] = tagCounts[t];
   if (!Object.keys(counts).length) for (const t of available) counts[t] = 1;
-  const quota = allocate(counts, total, Math.ceil(total * 0.1));
+  // If a quota exceeds what its tag has, shrink the total until none does, so the weights still show.
+  let quota = allocate(counts, total, Math.ceil(total * 0.1));
+  for (;;) {
+    const fit = Math.min(...Object.keys(quota).map((t) => pool[t].length / quota[t]));
+    if (fit >= 1) break;
+    total = Math.max(1, Math.min(total - 1, Math.floor(total * fit)));
+    quota = allocate(counts, total, Math.ceil(total * 0.1));
+  }
   const picked = [];
   for (const tag of Object.keys(quota)) {
     const list = pool[tag].slice(0, quota[tag]);

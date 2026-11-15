@@ -28,17 +28,29 @@ export function winsMaterial(board, uci) {
   if (victim > attacker) return true;
   const after = clone(board);
   playUci(after, uci);
-  return !after.isAttacked(m.to, other(board.turn()));
+  return !legalCaptures(after, m.to).length;
 }
 
-/** True if, after the move, the moved piece attacks two or more enemy non-pawns that are the king, undefended, or worth more. */
-export function forks(board, uci) {
+/** Legal moves (chess.js verbose) that capture on `square`. */
+function legalCaptures(board, square) {
+  return board.moves({ verbose: true }).filter((x) => x.to === square && (x.isCapture() || x.isEnPassant()));
+}
+
+/**
+ * True if, after the move, the moved piece attacks two or more enemy non-pawns that are the king,
+ * undefended, or worth more. `reply` is the opponent's expected answer (SAN, from the engine line):
+ * if it simply takes the forking piece, there was no fork.
+ */
+export function forks(board, uci, reply = null) {
   const after = clone(board);
   playUci(after, uci);
   const to = uci.slice(2, 4);
   const piece = after.get(to);
   if (!piece || piece.type === "k") return false;
   const enemy = other(piece.color);
+  if (reply) {
+    try { if (clone(after).move(reply).to === to) return false; } catch { /* not a legal reply: ignore it */ }
+  }
   let count = 0;
   for (const sq of attacksFrom(after, to)) {
     const target = after.get(sq);
@@ -89,7 +101,7 @@ export function tagMistake(boardBefore, playedUci, bestUci, context) {
   const missedMate = mateIsMine(ctx.prev_mate, me) && playedUci !== bestUci;
   if (missedMate) tags.push("missed_mate");
   if (bestUci && winsMaterial(boardBefore, bestUci)) tags.push("missed_capture");
-  else if (bestUci && forks(boardBefore, bestUci)) tags.push("missed_fork");
+  else if (bestUci && forks(boardBefore, bestUci, ctx.pv && ctx.pv.length > 1 ? ctx.pv[1] : null)) tags.push("missed_fork");
 
   const after = clone(boardBefore);
   playUci(after, playedUci);

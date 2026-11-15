@@ -416,3 +416,58 @@
 :root[data-theme="dos"] .welcome-error { color: #ff7777; }
 :root[data-theme="dos"] .welcome-note { color: #d0d0d0; }
 :root[data-theme="pastel"] .welcome-note, :root[data-theme="dos"] .welcome-note { font-size: inherit; }
+
+/* ====================================================================
+   PHONES (600px and below). Compact header, 44px tap targets, games as cards.
+   Widths above 600px are untouched. :root[data-theme] beats the per-theme rules above.
+   ==================================================================== */
+@media (max-width: 600px) {
+  :root[data-theme] header { gap: 4px 8px; padding: 8px 12px; margin-bottom: 0; box-shadow: none; }
+  :root[data-theme] header h1 { order: 1; font-size: 20px; line-height: 1.2; padding: 0 8px; }
+  :root[data-theme] header .theme-picker { order: 2; margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  :root[data-theme] header .theme-picker select { max-width: 170px; }
+  /* The "Theme" word is hidden visually on phones to make room; the label still names the select. */
+  :root[data-theme] header .theme-picker span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  :root[data-theme] header nav { order: 3; flex: 1 0 100%; gap: 4px; flex-wrap: nowrap; }
+  :root[data-theme] header nav a { flex: 1 1 0; display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 4px; }
+  :root[data-theme] header .player-chip { order: 4; flex: 1 0 100%; margin-left: 0; gap: 4px 8px; }
+  :root[data-theme] header .player-name { flex: 1 0 100%; line-height: 1.2; }
+  :root[data-theme] header .months-picker, :root[data-theme] header .player-chip button { flex: 1 1 0; }
+  :root[data-theme] :is(select, button, input[type="text"], summary), :root[data-theme] .controls button, :root[data-theme] .tag-button, :root[data-theme] .tag-close, :root[data-theme] .promo-picker button, :root[data-theme] #sync-status button, :root[data-theme] #moves button { min-height: 44px; }
+  :root[data-theme] summary { display: flex; align-items: center; }
+  :root[data-theme] #moves { max-height: 300px; }
+  :root[data-theme] .button-link, :root[data-theme] #review-line a, :root[data-theme] .neighbours a, :root[data-theme] .game-head a, :root[data-theme] td a { display: inline-flex; align-items: center; min-height: 44px; }
+  :root[data-theme] .filters { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 8px; }
+  :root[data-theme] .filters select { width: 100%; min-width: 0; text-overflow: ellipsis; }
+  :root[data-theme] main { padding: 8px 12px; }
+  /* The decorative DOS key bar would cover the bottom of the board and is cut off at this width. */
+  :root[data-theme="dos"] body::after { display: none; }
+
+  /* Games table: one card per game. data-label attributes come from games.js. */
+  :root[data-theme] .table-wrap { overflow-x: visible; }
+  :root[data-theme] table, :root[data-theme] tbody { display: block; width: 100%; }
+  :root[data-theme] thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  :root[data-theme] tbody tr {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    grid-template-areas: "date date result" "opp opp rating" "type open open" "mist mist link";
+    align-items: center;
+    gap: 2px 10px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line);
+  }
+  :root[data-theme] tbody tr:last-child { border-bottom: 0; }
+  :root[data-theme] tbody td { padding: 0; border: 0; white-space: normal; min-width: 0; overflow-wrap: anywhere; }
+  :root[data-theme] tbody td:nth-child(1) { grid-area: date; }
+  :root[data-theme] tbody td:nth-child(2) { grid-area: type; color: var(--muted); }
+  :root[data-theme] tbody td:nth-child(3) { grid-area: result; text-align: right; }
+  :root[data-theme] tbody td:nth-child(4) { grid-area: opp; }
+  :root[data-theme] tbody td:nth-child(5) { grid-area: rating; text-align: right; }
+  :root[data-theme] tbody td:nth-child(6) { grid-area: open; }
+  :root[data-theme] tbody td:nth-child(7) { grid-area: mist; }
+  :root[data-theme] tbody td:nth-child(8) { grid-area: link; text-align: right; }
+  :root[data-theme] tbody td:nth-child(2), :root[data-theme] tbody td:nth-child(6) { align-self: start; }
+  :root[data-theme] tbody td:nth-child(7) { white-space: nowrap; }
+  :root[data-theme] tbody td .count { min-width: 0; margin-right: 8px; }
+  :root[data-theme] tbody td[data-label]::before { content: attr(data-label) " "; color: var(--muted); font-weight: 400; }
+}

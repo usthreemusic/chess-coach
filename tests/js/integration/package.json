@@ -1,0 +1,12 @@
+{
+  "name": "chess-coach-integration-tests",
+  "private": true,
+  "type": "module",
+  "description": "Integration tests for the storage and sync layer (needs fake-indexeddb)",
+  "scripts": {
+    "test": "node --test"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.8"
+  }
+}
