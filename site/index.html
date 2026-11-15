@@ -4,6 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Chess Coach — Games</title>
+<link rel="stylesheet" href="vendor/chessground.base.css">
+<link rel="stylesheet" href="vendor/chessground.brown.css">
+<link rel="stylesheet" href="vendor/chessground.cburnett.css">
 <script src="js/theme.js"></script>
 <link rel="stylesheet" href="css/style.css">
 <link rel="stylesheet" href="css/themes.css">
@@ -19,7 +22,6 @@
   </nav>
 </header>
 <main>
-  <section class="weak coach" id="coach" hidden></section>
   <p class="summary" id="summary">Loading games…</p>
   <div class="filters">
     <select id="f-class" aria-label="Time control"><option value="">All time controls</option></select>
@@ -45,5 +47,6 @@
   <button id="more" hidden>Show more</button>
 </main>
 <script type="module" src="js/games.js"></script>
+<script type="module" src="js/coachchat.js"></script>
 </body>
 </html>

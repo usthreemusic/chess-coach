@@ -18,6 +18,9 @@ const { buildStats } = await core("stats.js");
 const { ratingBand, pickThemed } = await core("themed.js");
 const { explainLine } = await core("explain.js");
 const { buildCoach, checklistFor, CHECKLISTS } = await core("coach.js");
+const patterns = await core("patterns.js");
+const { buildScript, focusPuzzles, uciFromSan, WAIT_TEXT } = await core("coachscript.js");
+const { winsMaterial } = await core("themes.js");
 
 // ---- tiny harness ---------------------------------------------------------------------------
 const tests = [];
@@ -566,6 +569,357 @@ test("coach: goingWell prefers a falling tag, then blunders, then win rate, then
   // a losing record is not praised; falls back
   const e = coachOf(mkGames(10), []);
   eq(e.goingWell, "You have 10 games analysed, which is enough to see real patterns.");
+});
+
+// ---- playing-style patterns -----------------------------------------------------------------
+const { scanGame, findPatterns, pickForCoach, winningCaptures, pawnDamage, aboutTimes, DETECTORS } = patterns;
+
+/** An analysis object from SAN moves. over = { [ply index]: { cp?, class?, drop? } }; cp is White's view. */
+function mkAnalysis(sans, over = {}) {
+  const chess = new Chess();
+  const moves = sans.map((san, i) => {
+    const m = chess.move(san);
+    return { san: m.san, uci: m.from + m.to + (m.promotion || ""), cp: 0, ...(over[i] || {}) };
+  });
+  return { id: "t", start_cp: 0, moves };
+}
+const MISTAKE = { class: "mistake", drop: 150 };
+// Both sides castle, then shuffle kings for ply 26 (past my 12th move)
+const CASTLED = ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "O-O", "Nf6", "d3", "O-O"];
+for (let i = 0; i < 4; i++) CASTLED.push("Kh1", "Kh8", "Kg1", "Kg8");
+const scan = (sans, colour = "white", over = {}) => scanGame(mkAnalysis(sans, over), colour);
+/** Does detector `id` fire on my move number `n` (1-based among my moves)? */
+const fires = (sc, id, n) => DETECTORS.find((d) => d.id === id).q(sc.recs[n - 1]);
+
+test("detector king_loosen: pawn push in front of a castled king fires, without castling it does not", () => {
+  const castled = scan(["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "O-O", "Nf6", "h3"]);
+  ok(fires(castled, "king_loosen", 5), "h3 after O-O");
+  ok(!fires(castled, "king_loosen", 4), "castling itself");
+  ok(!fires(scan(["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "d3", "Nf6", "h3"]), "king_loosen", 5), "h3 before castling");
+});
+
+test("detector early_queen: fires on Qh5, not on a recapture or a queen trade", () => {
+  ok(fires(scan(["e4", "e5", "Qh5"]), "early_queen", 2), "Qh5");
+  ok(!fires(scan(["e4", "d5", "exd5", "Qxd5"], "black"), "early_queen", 2), "recapture Qxd5");
+  ok(!fires(scan(["d4", "d5", "Nc3", "Nc6", "Nf3", "Qd6", "Bf4", "Qxf4"].slice(0, 6)), "early_queen", 1), "d4 is not a queen move");
+  ok(!fires(scan(["e4", "e5", "Qh5", "Qh4", "Qxh4"]), "early_queen", 3), "Qxh4 takes the queen");
+});
+
+test("detector undeveloped: second move of a piece with minors at home fires; first move or a piece under attack does not", () => {
+  ok(fires(scan(["e4", "e5", "Nf3", "Nc6", "Ng5"]), "undeveloped", 3), "Nf3 then Ng5");
+  ok(!fires(scan(["e4", "e5", "Nf3", "Nc6", "Bc4"]), "undeveloped", 3), "first bishop move");
+  ok(!fires(scan(["Nf3", "g5", "a3", "g4", "Nd4"]), "undeveloped", 3), "knight was attacked by the pawn");
+});
+
+test("detector lunge: a piece landing where a pawn takes it fires; an equal capture does not", () => {
+  ok(fires(scan(["e4", "e5", "Nf3", "Nc6", "Nc3", "a6", "Nb5"]), "lunge_quiet", 4), "Nb5 into a6");
+  ok(fires(scan(["e4", "a6", "Nf3", "d6", "Bb5+"]), "lunge_aggressive", 3), "Bb5+ into a6");
+  ok(!fires(scan(["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"]), "lunge_aggressive", 4), "an equal capture is not a lunge");
+});
+
+test("detector quiet_check: a check that captures nothing fires", () => {
+  ok(fires(scan(["e4", "f6", "Qh5+"]), "quiet_check", 2), "Qh5+");
+  ok(!fires(scan(["e4", "f6", "d4"]), "quiet_check", 2), "d4 is not a check");
+});
+
+test("detector pawn_grab: queen takes a pawn fires; pawn takes pawn does not", () => {
+  ok(fires(scan(["e4", "d5", "exd5", "Qxd5"], "black"), "pawn_grab", 2), "Qxd5");
+  ok(!fires(scan(["e4", "d5", "exd5", "Qxd5"]), "pawn_grab", 2), "exd5 by a pawn");
+});
+
+test("detector pawn_push: a pawn to the 5th rank fires; a capture or a shorter push does not", () => {
+  ok(fires(scan(["e4", "d5", "e5"]), "pawn_push", 2), "e5");
+  ok(!fires(scan(["e4", "d5", "exd5"]), "pawn_push", 2), "exd5");
+  ok(!fires(scan(["e4", "d5", "d4"]), "pawn_push", 2), "d4");
+});
+
+test("detector pawn_damage: a capture that doubles pawns fires; a quiet pawn move does not; pawnDamage counts", () => {
+  ok(fires(scan(["e4", "d5", "exd5"]), "pawn_damage", 2), "exd5 doubles the d pawns");
+  ok(!fires(scan(["e4", "e5", "d3"]), "pawn_damage", 2), "d3");
+  eq(pawnDamage([1, 0, 2, 0, 0, 1, 0, 0]), 5, "a, f isolated; c doubled and isolated");
+});
+
+test("detector even_trade with trade_behind / trade_ahead by the eval before the move", () => {
+  const line = ["e4", "e5", "Nf3", "Nc6", "Bb5", "a6", "Bxc6"];
+  const eqm = (cpBefore, id) => fires(scan(line, "white", { 5: { cp: cpBefore } }), id, 4);
+  ok(eqm(-200, "trade_behind") && !eqm(-200, "trade_ahead"), "behind");
+  ok(eqm(200, "trade_ahead") && !eqm(200, "trade_behind"), "ahead");
+  ok(!eqm(0, "trade_behind") && !eqm(0, "trade_ahead"), "level");
+});
+
+test("detector ignored_threat vs walked_into", () => {
+  const ignore = ["e4", "e5", "Bc4", "b5", "a3"]; // b5 attacks the bishop; a3 ignores it
+  ok(fires(scan(ignore), "ignored_threat", 3), "a3 ignores the attack on Bc4");
+  ok(!fires(scan(["e4", "e5", "Bc4", "b5", "Bb3"]), "ignored_threat", 3), "Bb3 moves away");
+  ok(!fires(scan(ignore), "walked_into", 3), "not a new threat");
+  const walk = ["e4", "d5", "Nf3", "d4", "Nc3"]; // Nc3 steps onto a square the d4 pawn attacks
+  ok(fires(scan(walk), "walked_into", 3) && !fires(scan(walk), "ignored_threat", 3), "Nc3 walks into dxc3");
+  ok(!fires(scan(["e4", "d5", "Nf3", "d4", "d3"]), "walked_into", 3), "d3");
+});
+
+test("winningCaptures agrees with themes.winsMaterial (x-rays aside) on fixture positions", () => {
+  let total = 0, differ = 0;
+  for (const { analysis } of pairs.slice(0, 12)) {
+    const chess = new Chess();
+    for (const m of analysis.moves) {
+      chess.move(m.san);
+      if (chess.isCheck()) continue;
+      const mine = winningCaptures(chess);
+      for (const mv of chess.moves({ verbose: true })) {
+        if (!mv.isCapture() && !mv.isEnPassant()) continue;
+        total++;
+        const theirs = winsMaterial(chess, mv.from + mv.to + (mv.promotion || ""));
+        if (!mv.isEnPassant() && theirs !== mine.has(mv.from + mv.to)) differ++;
+      }
+    }
+  }
+  ok(total > 500, `only ${total} captures compared`);
+  ok(differ / total < 0.005, `${differ} of ${total} differ`);
+});
+
+test("record fields: oppBlunder, tilt (next2), ahead/behind and centre", () => {
+  const sc = scan(["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "d3"], "white", { 1: { class: "blunder", drop: 400 }, 2: MISTAKE, 4: { class: "blunder", drop: 300 }, 6: MISTAKE });
+  ok(!sc.recs[0].oppBlunder && sc.recs[1].oppBlunder, "oppBlunder after ply 2");
+  eq(sc.recs[1].err && sc.recs[1].drop, 150, "my reply was an error");
+  const mine = scan(["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5", "d3"], "black", { 1: { class: "blunder", drop: 400 }, 3: MISTAKE, 5: MISTAKE });
+  eq(mine.recs[0].next2, 150 + 150, "two errors follow a blunder");
+  ok(mine.recs[0].blunder && !mine.recs[1].blunder, "blunder flag");
+  const up = scan(["e4", "e5", "Nf3", "Nc6", "Bc4"], "white", { 0: { cp: 400 }, 1: { cp: 400 } });
+  ok(up.ahead && !up.behind, "ahead for two plies");
+  ok(!scan(["e4", "e5", "Nf3"], "white", { 0: { cp: 400 } }).ahead, "one ply is not sustained");
+  const shuffle = [];
+  for (let i = 0; i < 7; i++) shuffle.push("Nf3", "Nf6", "Ng1", "Ng8");
+  eq(scan(shuffle).centre, true, "king still in the centre at move 12");
+  const castledEarly = [...CASTLED];
+  eq(scan(castledEarly).centre, false, "castled by move 12");
+  eq(scan(["e4", "e5"]).centre, null, "too short");
+});
+
+// Synthetic players for the threshold tests: `n` games of one scripted opening.
+const SCRIPT = ["e4", "e5", "Qh5", "Nc6", "Nf3", "d6", "d3", "Be6"];
+function crowd(n, script, over, first = 0) {
+  return Array.from({ length: n }, (_, i) => ({
+    game: { id: "g" + (first + i), end_time: 1000 + first + i, colour: "white", result: "win" },
+    analysis: mkAnalysis(script, over),
+  }));
+}
+const ids = (list) => list.map((p) => p.id);
+
+test("findPatterns: a habit with enough moves and lift is returned, with real numbers in its text", () => {
+  const found = findPatterns(crowd(15, SCRIPT, { 2: MISTAKE }));
+  const p = found.find((x) => x.id === "early_queen");
+  ok(p && p.n === 15 && p.errors === 15 && !p.good, "early_queen found");
+  ok(p.text.includes("15 times") && p.text.includes("15 of them") && p.text.includes("your last 15 games"), p.text);
+  ok(p.advice.length > 10 && p.strength > 0 && p.lift > 1.4, "advice and strength");
+});
+
+test("findPatterns: below n, or below the lift threshold, a habit is not returned", () => {
+  ok(!ids(findPatterns(crowd(11, SCRIPT, { 2: MISTAKE }))).includes("early_queen"), "11 moves is below n = 12");
+  // every opening move is a mistake, so the queen move is no worse than the rest: lift 1
+  const flat = { 0: MISTAKE, 2: MISTAKE, 4: MISTAKE, 6: MISTAKE };
+  ok(!ids(findPatterns(crowd(15, SCRIPT, flat))).includes("early_queen"), "lift 1 is not a habit");
+});
+
+test("findPatterns: a strength (low rate, enough moves) comes back with good = true", () => {
+  // Black blunders on every game (ply 2); I reply well. My other moves go wrong a lot.
+  const script = ["e4", "e5", "Nf3", "Nc6", "Bc4", "Bc5"];
+  const over = { 1: { class: "blunder", drop: 400 }, 0: MISTAKE, 4: MISTAKE };
+  const found = findPatterns(crowd(22, script, over));
+  const g = found.find((x) => x.id === "no_punish");
+  ok(g && g.good && g.n === 22 && g.errors === 0, "no_punish praised");
+  ok(g.text.includes("22") && g.text.includes("less often"), g.text);
+  ok(!ids(findPatterns(crowd(19, script, over))).includes("no_punish"), "fewer than 20 moves is not enough to praise");
+});
+
+test("findPatterns: the most recent maxGames games are used", () => {
+  const oldGames = crowd(15, SCRIPT, { 2: MISTAKE }, 0);
+  const newGames = crowd(15, SCRIPT, {}, 100);
+  const all = [...newGames, ...oldGames]; // order must not matter
+  ok(ids(findPatterns(all, { maxGames: 15 })).every((i) => i !== "early_queen"), "only the new games");
+  const wide = findPatterns(all, { maxGames: 30 }).find((x) => x.id === "early_queen");
+  ok(wide && wide.n === 30 && wide.errors === 15, "30 games include the old ones");
+  ok(ids(findPatterns(oldGames, { maxGames: 30 })).includes("early_queen"), "old games alone show it");
+});
+
+test("findPatterns: sorted by strength, and costlier habits outrank cheaper ones", () => {
+  const cheap = { 2: { class: "mistake", drop: 100 } };
+  const costly = { 2: { class: "blunder", drop: 600 } };
+  const a = findPatterns(crowd(15, SCRIPT, cheap)).find((x) => x.id === "early_queen");
+  const b = findPatterns(crowd(15, SCRIPT, costly)).find((x) => x.id === "early_queen");
+  ok(b.strength > a.strength * 3, `${b.strength} vs ${a.strength}`);
+  const mixed = findPatterns(crowd(20, SCRIPT, { 2: MISTAKE, 4: { class: "blunder", drop: 700 } }));
+  for (let i = 1; i < mixed.length; i++) ok(mixed[i - 1].strength >= mixed[i].strength, "descending");
+});
+
+test("findPatterns: game-level habits need 8 games on each side and a 15 point gap", () => {
+  const castle = CASTLED;
+  const shuffle = [];
+  for (let i = 0; i < 7; i++) shuffle.push("Nf3", "Nf6", "Ng1", "Ng8");
+  const mk = (n, script, result, first) => crowd(n, script, {}, first).map((p) => ({ ...p, game: { ...p.game, result } }));
+  const split = [...mk(10, castle, "win", 0), ...mk(5, castle, "loss", 10), ...mk(6, shuffle, "win", 20), ...mk(9, shuffle, "loss", 30)];
+  const hit = findPatterns(split).find((x) => x.id === "king_centre");
+  ok(hit && hit.withGames === 15 && hit.withoutGames === 15, "king_centre found");
+  eq([Math.round(hit.withRate * 100), Math.round(hit.withoutRate * 100)], [40, 67], "rates");
+  ok(hit.text.includes("40%") && hit.text.includes("67%") && hit.n === undefined, hit.text);
+  ok(!ids(findPatterns(split.slice(0, 22))).includes("king_centre"), "fewer than 8 games with the king in the centre");
+  ok(!ids(findPatterns([...mk(10, castle, "win", 0), ...mk(5, castle, "loss", 10), ...mk(8, shuffle, "win", 20), ...mk(7, shuffle, "loss", 30)])).includes("king_centre"), "gap under 15 points");
+});
+
+test("findPatterns: converting winning positions is praised, throwing them away is not", () => {
+  const up = { 0: { cp: 400 }, 1: { cp: 400 }, 2: { cp: 400 } };
+  const script = ["e4", "e5", "Nf3", "Nc6"];
+  const mk = (wins, losses) => [
+    ...crowd(wins, script, up, 0).map((p) => ({ ...p, game: { ...p.game, result: "win" } })),
+    ...crowd(losses, script, up, 50).map((p) => ({ ...p, game: { ...p.game, result: "loss" } })),
+  ];
+  const good = findPatterns(mk(18, 3)).find((x) => x.id === "convert");
+  ok(good && good.good && good.text.includes("won 18 of the 21 games"), good && good.text);
+  const bad = findPatterns(mk(8, 8)).find((x) => x.id === "convert");
+  ok(bad && !bad.good && bad.text.includes("won only 8 of the 16"), bad && bad.text);
+});
+
+test("aboutTimes rounds to the nearest half and pickForCoach keeps one habit per family", () => {
+  eq(aboutTimes(2.1), "about twice");
+  eq(aboutTimes(1.45), "about one and a half times");
+  eq(aboutTimes(2.8), "about three times");
+  const mkp = (id, strength, family, good = false) => ({ id, strength, family, good });
+  const pick = pickForCoach([mkp("walked_into", 2, "en_prise"), mkp("lunge_quiet", 1.9, "en_prise"), mkp("tilt", 1.5, "tilt"), mkp("no_punish", 1, "no_punish", true), mkp("x", 0.1, "x")]);
+  eq(pick.bad.map((p) => p.id), ["walked_into", "tilt"]);
+  eq(pick.good.id, "no_punish");
+  eq(pick.headline.id, "walked_into");
+  eq(pickForCoach([mkp("x", 0.2, "x")]).headline, null);
+  eq(pickForCoach([]).bad, []);
+  // A habit of style is listed first and is the headline, even when another habit is stronger.
+  const styled = pickForCoach([{ ...mkp("no_punish", 3, "no_punish"), group: "awareness" }, { ...mkp("pawn_push", 0.4, "pawn_push"), group: "aggression" }]);
+  eq(styled.bad.map((p) => p.id), ["pawn_push", "no_punish"]);
+  eq(styled.headline.id, "pawn_push");
+});
+
+test("findPatterns over the 25 fixture games: no errors, every pattern has text and advice", () => {
+  const found = findPatterns(pairs);
+  for (const p of found) {
+    ok(typeof p.id === "string" && p.text.length > 20 && p.advice.length > 20, `${p.id} text/advice`);
+    ok(Number.isFinite(p.strength) && ["aggression", "structure", "awareness", "flow"].includes(p.group), `${p.id} fields`);
+    ok(!/undefined|NaN|Infinity/.test(p.text + p.advice), `${p.id}: ${p.text}`);
+  }
+  for (let i = 1; i < found.length; i++) ok(found[i - 1].strength >= found[i].strength, "sorted");
+  eq(findPatterns([]), []);
+});
+
+
+// ---- habit examples and the coach script -----------------------------------------------------
+const exampleOk = (e) => ["game_id", "ply", "fen", "uci", "san", "best_uci", "best_san", "drop", "colour", "end_time"].every((k) => e[k] !== undefined && e[k] !== null);
+
+test("findPatterns: every habit has at most 3 examples, errors with a better move, costliest first", () => {
+  const found = patterns.findPatterns(pairs);
+  ok(found.length > 0, "some patterns");
+  const withEx = found.filter((p) => p.examples.length);
+  ok(withEx.length > 0, "some pattern has examples");
+  const byGame = new Map(pairs.map(({ game, analysis }) => [game.id, { game, analysis }]));
+  for (const p of found) {
+    ok(Array.isArray(p.examples) && p.examples.length <= 3, `${p.id} examples`);
+    if (p.good || ["convert", "comeback", "king_centre"].includes(p.id)) { eq(p.examples, [], `${p.id} examples`); continue; }
+    for (let i = 0; i < p.examples.length; i++) {
+      const e = p.examples[i];
+      ok(exampleOk(e), `${p.id} example fields`);
+      if (i) ok(p.examples[i - 1].drop >= e.drop, `${p.id} sorted by drop`);
+      const { game, analysis } = byGame.get(e.game_id);
+      const mv = analysis.moves[e.ply - 1];
+      ok(mv.uci === e.uci && mv.best_uci === e.best_uci && (mv.class === "mistake" || mv.class === "blunder"), `${p.id} example is a real error`);
+      eq(e.colour, game.colour);
+      ok(new Chess(e.fen).move(e.san), `${p.id} fen plays san`);
+    }
+  }
+});
+
+test("pickExamples: one per game first, then fills, max 3, costliest first", () => {
+  const h = (game_id, drop) => ({ game_id, drop });
+  eq(patterns.pickExamples([h("a", 100), h("a", 500), h("b", 200), h("c", 50), h("c", 40)]).map((e) => `${e.game_id}${e.drop}`), ["a500", "b200", "c50"]);
+  eq(patterns.pickExamples([h("a", 100), h("a", 500), h("a", 300), h("a", 200)]).map((e) => e.drop), [500, 300, 200]);
+  eq(patterns.pickExamples([h("a", 1), h("b", 2)]).map((e) => e.drop), [2, 1]);
+  eq(patterns.pickExamples([]), []);
+});
+
+const analysedGames = pairs.map(({ game, analysis }) => {
+  const mistakes = { inaccuracy: 0, mistake: 0, blunder: 0 };
+  for (const m of analysis.moves) if (m.class) mistakes[m.class]++;
+  return { ...game, mistakes };
+});
+const allPuzzles = pairs.flatMap(({ game, analysis }) => buildPuzzles(game, analysis));
+const fixtureNote = buildCoach(analysedGames, allPuzzles, { now: 1e12 });
+const fixturePicked = patterns.pickForCoach(patterns.findPatterns(pairs));
+
+test("buildScript: order, presence and absence of messages for the fixture games", () => {
+  ok(fixtureNote, "note exists");
+  const early = buildScript(fixtureNote, null, allPuzzles, analysedGames);
+  eq(early.map((m) => m.id), ["greeting", "pattern", "focus"]);
+  eq(early[0].paragraphs, [`Hi! I've looked at your last ${fixtureNote.recentGames} games.`, fixtureNote.goingWell]);
+  eq(early[0].examples, []);
+  eq(early[1].paragraphs, [fixtureNote.pattern]);
+  eq(early[2].paragraphs[0], `This week's focus: ${fixtureNote.focus.label}.`);
+  eq(early[2].paragraphs[1], fixtureNote.advice);
+  ok(early[2].paragraphs[2].includes(fixtureNote.checklist), "checklist line");
+  eq(early[2].examples, []);
+
+  const full = buildScript(fixtureNote, fixturePicked, allPuzzles, analysedGames);
+  const { bad, good, headline } = fixturePicked;
+  const expectIds = ["greeting", "pattern", "focus"];
+  if (headline) expectIds.push(`habit:${headline.id}`);
+  for (const p of bad) if (p !== headline) expectIds.push(`habit:${p.id}`);
+  if (good) expectIds.push(`strength:${good.id}`);
+  expectIds.push("trends");
+  eq(full.map((m) => m.id), expectIds);
+  const last = full[full.length - 1];
+  eq(last.paragraphs, fixtureNote.trends.map((t) => t.text));
+  eq(last.paragraphs.length, 3);
+  if (headline) {
+    const m = full.find((x) => x.id === `habit:${headline.id}`);
+    eq(m.paragraphs, [`Something else I've noticed: ${headline.text}`, headline.advice]);
+  }
+  if (good) eq(full.find((x) => x.id.startsWith("strength:")).examples, []);
+  for (const m of full) for (const e of m.examples) {
+    ok(e.fen && e.best && e.caption && e.reviewUrl.startsWith("review.html?id="), `example fields in ${m.id}`);
+    ok(/^Move \d+ (against \S+|in your game on \d{4}-\d\d-\d\d): you played \S+\. \S+ was better\.$/.test(e.caption), e.caption);
+  }
+});
+
+test("buildScript: no habits at all still ends with the trends; a null note is one message with no examples", () => {
+  const bare = buildScript(fixtureNote, { bad: [], good: null, headline: null }, allPuzzles, analysedGames);
+  eq(bare.map((m) => m.id), ["greeting", "pattern", "focus", "trends"]);
+  const wait = buildScript(null, null, [], []);
+  eq(wait, [{ id: "wait", paragraphs: [WAIT_TEXT], examples: [] }]);
+});
+
+test("coach script: focus examples are filtered by tag, costliest first, one per game, at most 3", () => {
+  const tag = fixtureNote.focus.tag;
+  const picked3 = focusPuzzles(fixtureNote, allPuzzles, analysedGames);
+  ok(picked3.length <= 3, "max 3");
+  const hasTag = (p) => ((p.tags && p.tags.length) ? p.tags : ["other"]).includes(tag);
+  ok(picked3.every(hasTag), "tag filter");
+  for (let i = 1; i < picked3.length; i++) ok(picked3[i - 1].drop >= picked3[i].drop, "costliest first");
+  // synthetic: four puzzles in two games, plus one with another tag and one outside the window
+  const mk = (id, game_id, drop, tags) => ({ id, game_id, ply: 4, fen: new Chess().fen(), best_uci: "e2e4", best_san: "e4", played_san: "d4", drop, tags, colour: "white", end_time: 5 });
+  const g = (id, t) => ({ id, end_time: t, opponent: "rival" + id, mistakes: { mistake: 1 } });
+  const games8 = [1, 2, 3, 4, 5, 6, 7, 8].map((i) => g("g" + i, i));
+  const fakeNote = { recentGames: 4, focus: { tag: "hung_piece" }, goingWell: "w", pattern: "p", advice: "a", checklist: "c", trends: [] };
+  const ps = [mk("1", "g8", 300, ["hung_piece"]), mk("2", "g8", 900, ["hung_piece"]), mk("3", "g7", 200, ["hung_piece"]), mk("4", "g6", 100, ["hung_piece"]),
+    mk("5", "g5", 50, ["hung_piece"]), mk("6", "g7", 999, ["back_rank"]), mk("7", "g1", 5000, ["hung_piece"])];
+  eq(focusPuzzles(fakeNote, ps, games8).map((p) => p.id), ["2", "3", "4"]); // g5 is outside the 4 newest games; g1 too
+  const msg = buildScript(fakeNote, null, ps, games8)[1];
+  eq(msg.examples.length, 3);
+  eq(msg.examples[0].caption, "Move 2 against rivalg8: you played d4. e4 was better.");
+  eq(msg.examples[0].reviewUrl, "review.html?id=g8&ply=4");
+  eq(msg.examples[0].played, "d2d4");
+  eq(msg.examples[0].best, "e2e4");
+  eq(msg.examples[0].orientation, "white");
+  // no opponent on record: falls back to the date
+  const noOpp = buildScript(fakeNote, null, ps, games8.map((x) => ({ ...x, opponent: undefined })))[1];
+  ok(noOpp.examples[0].caption.startsWith("Move 2 in your game on 1970-01-01:"), noOpp.examples[0].caption);
+  // an "other" focus takes puzzles with no tags
+  const other = { ...fakeNote, focus: { tag: "other" } };
+  eq(focusPuzzles(other, [mk("9", "g8", 10, []), mk("10", "g8", 20, undefined), mk("11", "g7", 5, ["hung_piece"])], games8).map((p) => p.id), ["10", "9"]); // untagged only; the second from the same game fills up
+  eq(uciFromSan(new Chess().fen(), "Nf3"), "g1f3");
+  eq(uciFromSan(new Chess().fen(), "Qh5"), null);
 });
 
 // ---- run ------------------------------------------------------------------------------------

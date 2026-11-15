@@ -104,8 +104,6 @@
 :root[data-theme="pastel"] #info::before { content: "Coach_says.txt" !important; }
 :root[data-theme="pastel"] .weak { --tb: #f25ca2 !important; }
 :root[data-theme="pastel"] .weak::before { content: "Weak_spots.txt" !important; }
-:root[data-theme="pastel"] .weak.coach { --tb: #3ecbf0 !important; }
-:root[data-theme="pastel"] .weak.coach::before { content: "Coach.txt" !important; }
 :root[data-theme="pastel"] .chart-card::before { content: "Graph.bmp" !important; }
 :root[data-theme="pastel"] .chart-card:nth-child(3n+2) { --tb: #f25ca2 !important; }
 :root[data-theme="pastel"] .chart-card:nth-child(3n+2)::before { content: "Oops_chart.png" !important; }
@@ -118,8 +116,6 @@
 :root[data-theme="pastel"] #status:not([hidden]) { display: block; }
 :root[data-theme="pastel"] #info { min-height: 76px; }
 :root[data-theme="pastel"] .weak h2, :root[data-theme="pastel"] .chart-card h2 { font-size: 22px; font-weight: 400; }
-:root[data-theme="pastel"] .coach h3 { font-size: 20px; font-weight: 400; }
-:root[data-theme="pastel"] .coach p, :root[data-theme="pastel"] .coach .coach-trends { font-size: inherit; }
 :root[data-theme="pastel"] #result:not(:empty) { background: #fff; border: 3px solid #2a1a5e; padding: 6px 10px; box-shadow: 3px 3px 0 #2a1a5e; margin-bottom: 10px; }
 :root[data-theme="pastel"] #result p:last-child { margin-bottom: 0; }
 
@@ -251,7 +247,6 @@
   font-weight: 700;
 }
 :root[data-theme="win95"] .weak::before { content: "Weaknesses"; }
-:root[data-theme="win95"] .weak.coach::before { content: "Coach's note"; }
 :root[data-theme="win95"] .chart-card::before { content: "Chart"; }
 :root[data-theme="win95"] .chart-box { background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 4px; }
 :root[data-theme="win95"] .weak h2, :root[data-theme="win95"] .chart-card h2 { font-size: 14px; }
@@ -336,8 +331,6 @@
 :root[data-theme="dos"] #info { padding: 6px 10px; }
 :root[data-theme="dos"] th { font-size: 18px; font-weight: 400; color: #ffff55; border-bottom: 2px solid #fff; }
 :root[data-theme="dos"] td { border-bottom: 0; }
-:root[data-theme="dos"] .coach h3 { color: #ffff55; font-weight: 400; font-size: 20px; text-transform: uppercase; }
-:root[data-theme="dos"] .coach p, :root[data-theme="dos"] .coach .coach-trends { font-size: inherit; }
 :root[data-theme="dos"] .weak h2, :root[data-theme="dos"] .chart-card h2, :root[data-theme="dos"] #prompt,
 :root[data-theme="dos"] .game-head h2 { color: #ffff55; font-weight: 400; font-size: 24px; text-transform: uppercase; }
 :root[data-theme="dos"] #prompt { font-size: 24px; }
@@ -416,3 +409,64 @@
 :root[data-theme="dos"] .welcome-error { color: #ff7777; }
 :root[data-theme="dos"] .welcome-note { color: #d0d0d0; }
 :root[data-theme="pastel"] .welcome-note, :root[data-theme="dos"] .welcome-note { font-size: inherit; }
+
+/* ====================================================================
+   FLOATING COACH (js/coachchat.js)
+   ==================================================================== */
+/* Pastel: a little window with a cyan title bar, hard shadow */
+:root[data-theme="pastel"] .coach-launcher { border-radius: 50%; background: #ffc21a; color: #2a1a5e; border: 3px solid #2a1a5e; box-shadow: 3px 3px 0 #2a1a5e; }
+:root[data-theme="pastel"] .coach-launcher:hover { background: #ffd966; }
+:root[data-theme="pastel"] .coach-launcher:active { transform: translate(3px, 3px); box-shadow: none; }
+:root[data-theme="pastel"] .coach-badge { background: #f25ca2; border: 3px solid #2a1a5e; width: 18px; height: 18px; top: -6px; right: -6px; }
+:root[data-theme="pastel"] .coach-chat { background: #fff; border: 3px solid #2a1a5e; border-radius: 0; box-shadow: 6px 6px 0 #2a1a5e; }
+:root[data-theme="pastel"] .coach-head { background: #3ecbf0; border-bottom: 3px solid #2a1a5e; padding: 2px 6px 2px 10px; }
+:root[data-theme="pastel"] .coach-title { font-size: 22px; font-weight: 400; }
+:root[data-theme="pastel"] .coach-minimise { width: 32px; min-height: 28px; height: 28px; box-shadow: 2px 2px 0 #2a1a5e; }
+:root[data-theme="pastel"] .coach-msg { background: #f1ebff; border: 2px solid #2a1a5e; border-radius: 0; box-shadow: 3px 3px 0 #2a1a5e; }
+:root[data-theme="pastel"] .coach-dot { background: #2a1a5e; }
+:root[data-theme="pastel"] .coach-board-wrap { border: 3px solid #2a1a5e; }
+:root[data-theme="pastel"] .coach-review { color: #5b35c9; }
+:root[data-theme="pastel"] .coach-actions { border-top: 3px solid #2a1a5e; }
+:root[data-theme="pastel"] .coach-primary { background: #ffc21a; color: #2a1a5e; border-color: #2a1a5e; }
+:root[data-theme="pastel"] .coach-primary:hover { background: #ffd966; }
+:root[data-theme="pastel"] .coach-actions a.coach-train { border: 3px solid #2a1a5e; box-shadow: 3px 3px 0 #2a1a5e; color: #fff; }
+:root[data-theme="pastel"] .coach-progress { font-size: inherit; }
+
+/* Windows 95: grey bevelled window, navy title bar */
+:root[data-theme="win95"] .coach-launcher { border-radius: 50%; background: #c0c0c0; color: #000080; border: 2px solid; border-color: #fff #404040 #404040 #fff; box-shadow: inset -1px -1px 0 #808080, 1px 1px 0 #000; }
+:root[data-theme="win95"] .coach-launcher:active { border-color: #404040 #fff #fff #404040; box-shadow: inset 1px 1px 0 #808080; }
+:root[data-theme="win95"] .coach-badge { background: #f00; border: 2px solid #fff; }
+:root[data-theme="win95"] .coach-chat { background: #c0c0c0; border: 2px solid; border-color: #fff #404040 #404040 #fff; border-radius: 0; box-shadow: 1px 1px 0 #000, 3px 3px 8px rgba(0, 0, 0, 0.4); }
+:root[data-theme="win95"] .coach-head { background: #000080; color: #fff; border-bottom: 0; padding: 3px 4px 3px 8px; }
+:root[data-theme="win95"] .coach-title { font-size: 14px; font-weight: 700; color: #fff; }
+:root[data-theme="win95"] .coach-minimise { width: 24px; min-height: 22px; height: 22px; font-size: 14px; font-weight: 700; }
+:root[data-theme="win95"] .coach-log { background: #fff; margin: 4px; border: 2px solid; border-color: #808080 #fff #fff #808080; box-shadow: inset 1px 1px 0 #404040; }
+:root[data-theme="win95"] .coach-msg { background: #ffffe1; border: 1px solid #000; border-radius: 0; }
+:root[data-theme="win95"] .coach-dot { background: #000; }
+:root[data-theme="win95"] .coach-board-wrap { outline: 2px solid #808080; box-shadow: 0 0 0 2px #fff, 0 0 0 4px #404040; margin: 4px; width: min(252px, calc(100% - 8px)); }
+:root[data-theme="win95"] .coach-review { color: #000080; }
+:root[data-theme="win95"] .coach-actions { border-top: 0; }
+:root[data-theme="win95"] .coach-primary { background: #c0c0c0; color: #000; border-color: #fff #404040 #404040 #fff; }
+:root[data-theme="win95"] .coach-actions a.coach-train { border: 2px solid; border-color: #fff #404040 #404040 #fff; }
+
+/* DOS: blue with a double white border, yellow headings. Sits above the fixed function-key bar. */
+:root[data-theme="dos"] .coach-launcher { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); background: #ffff55; color: #000; border: 4px double #fff; box-shadow: 4px 4px 0 #000; border-radius: 50%; }
+:root[data-theme="dos"] .coach-launcher:active { transform: translate(4px, 4px); box-shadow: none; }
+:root[data-theme="dos"] .coach-badge { background: #ff5555; border: 2px solid #fff; border-radius: 0; top: -6px; right: -6px; }
+:root[data-theme="dos"] .coach-chat { bottom: calc(52px + env(safe-area-inset-bottom, 0px)); background: #0000aa; border: 4px double #fff; border-radius: 0; box-shadow: none; }
+:root[data-theme="dos"] .coach-head { border-bottom: 2px solid #fff; padding: 2px 6px 2px 10px; }
+:root[data-theme="dos"] .coach-title { color: #ffff55; font-size: 24px; font-weight: 400; text-transform: uppercase; }
+:root[data-theme="dos"] .coach-minimise { width: 32px; min-height: 28px; height: 28px; }
+:root[data-theme="dos"] .coach-msg { background: #000080; border: 2px solid #fff; border-radius: 0; }
+:root[data-theme="dos"] .coach-dot { background: #ffff55; }
+:root[data-theme="dos"] .coach-board-wrap { border: 4px double #fff; }
+:root[data-theme="dos"] .coach-review { color: #ffff55; }
+:root[data-theme="dos"] .coach-actions { border-top: 2px solid #fff; }
+:root[data-theme="dos"] .coach-primary { background: #aaaaaa; color: #000; border-color: #fff; }
+:root[data-theme="dos"] .coach-primary:hover { background: #fff; }
+:root[data-theme="dos"] .coach-actions a.coach-train { border: 2px solid #fff; background: #ffff55; color: #0000aa; text-transform: uppercase; }
+@media (max-width: 600px) {
+  :root[data-theme="pastel"] .coach-chat { border-width: 3px 0 0; box-shadow: none; }
+  :root[data-theme="win95"] .coach-chat { border-width: 2px 0 0; }
+  :root[data-theme="dos"] .coach-chat { bottom: 44px; border-width: 4px 0 0; border-style: double; }
+}

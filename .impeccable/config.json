@@ -29,6 +29,42 @@
         ],
         "createdAt": "2026-11-14T09:22:21.434Z",
         "reason": "agent triage: line 95 is the bottom rule of a square-cornered window title bar (border-radius 0) in the retro Pastel theme, part of the user-approved mockup look"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/index.html"
+        ],
+        "createdAt": "2026-11-15T03:12:09.530Z",
+        "reason": "agent decided: these are the coach chat's three typing dots, shown only while the next message is pending (brief delay or habits still computing), disabled under prefers-reduced-motion; not a decorative liveness dot"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/review.html"
+        ],
+        "createdAt": "2026-11-15T03:12:09.548Z",
+        "reason": "agent decided: these are the coach chat's three typing dots, shown only while the next message is pending (brief delay or habits still computing), disabled under prefers-reduced-motion; not a decorative liveness dot"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/train.html"
+        ],
+        "createdAt": "2026-11-15T03:12:09.565Z",
+        "reason": "agent decided: these are the coach chat's three typing dots, shown only while the next message is pending (brief delay or habits still computing), disabled under prefers-reduced-motion; not a decorative liveness dot"
+      },
+      {
+        "rule": "pulsing-dot",
+        "value": "*",
+        "files": [
+          "site/stats.html"
+        ],
+        "createdAt": "2026-11-15T03:12:09.584Z",
+        "reason": "agent decided: these are the coach chat's three typing dots, shown only while the next message is pending (brief delay or habits still computing), disabled under prefers-reduced-motion; not a decorative liveness dot"
       }
     ]
   }

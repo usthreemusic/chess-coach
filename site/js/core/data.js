@@ -75,7 +75,7 @@ export async function loadAnalysis(id) {
 }
 
 // Games (with pgn) paired with their analysis, oldest first.
-function loadPairs() {
+export function loadPairs() {
   return memo("pairs", async (user) => {
     if (!user) return [];
     const [games, analyses] = await Promise.all([store.getGames(user), store.getAnalyses(user)]);
