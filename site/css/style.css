@@ -149,6 +149,16 @@ td a { color: var(--accent); }
 .counts-help p { margin: 4px 0 0; max-width: 60ch; }
 /* A correct move: green squares instead of the theme's last-move colour. */
 #board.good-move cg-board square.last-move { background-color: rgba(40, 180, 70, 0.62); }
+/* A wrong move: red squares and a red badge with a white cross on the piece, shown briefly before it goes back. */
+#board.bad-move cg-board square.last-move { background-color: rgba(225, 45, 45, 0.62); }
+.train-col { position: relative; }
+#wrong-badge {
+  position: absolute; z-index: 5; width: 26px; height: 26px; margin: 2px 0 0 -28px;
+  display: flex; align-items: center; justify-content: center;
+  background: #d81e1e; color: #fff; border: 2px solid #fff; border-radius: 50%;
+  font: 700 14px/1 Verdana, Geneva, sans-serif; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); pointer-events: none;
+}
+#wrong-badge[hidden] { display: none; }
 
 /* Board coordinates: inside the board, in the corner of each edge square, one dark colour that
    reads on both square colours. Replaces chessground's defaults, which are faint and sit off the squares. */
@@ -166,6 +176,15 @@ td a { color: var(--accent); }
 .weak ul { margin: 0 0 8px; padding-left: 20px; }
 .weak li { margin-bottom: 4px; }
 .weak p { margin: 0; font-size: 14px; }
+/* Coach's note (Games page): reuses the .weak panel look */
+.coach[hidden] { display: none; }
+.coach h3 { font-size: 15px; margin: 10px 0 4px; }
+.coach p { margin: 0 0 8px; font-size: 14px; }
+.coach .coach-well { font-weight: 600; }
+.coach .coach-trends { margin: 0 0 10px; font-size: 13px; }
+.coach .coach-trends li { margin-bottom: 2px; }
+.coach .coach-train { margin: 0; }
+.coach .button-link { min-height: 36px; padding: 6px 14px; }
 .chart-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
 .chart-card { background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px 16px; min-width: 0; }
 .chart-card.wide { grid-column: 1 / -1; }

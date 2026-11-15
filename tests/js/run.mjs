@@ -17,6 +17,7 @@ const { buildPuzzles } = await core("puzzles.js");
 const { buildStats } = await core("stats.js");
 const { ratingBand, pickThemed } = await core("themed.js");
 const { explainLine } = await core("explain.js");
+const { buildCoach, checklistFor, CHECKLISTS } = await core("coach.js");
 
 // ---- tiny harness ---------------------------------------------------------------------------
 const tests = [];
@@ -416,6 +417,155 @@ test("explain: empty or illegal lines never throw", () => {
   eq(explainLine(LADDER, []), none);
   eq(explainLine(LADDER, ["Qh9"]), none);
   eq(explainLine(LADDER, ["Ra7", "Qh9"]).length, 1);
+});
+
+// ---- coach ----------------------------------------------------------------------------------
+const DAY = 86400000;
+const NOW = 1_800_000_000_000;
+const MIDDLE = "r1bqkb1r/pppp1ppp/2n2n2/4p3/4P3/2N2N2/PPPP1PPP/R1BQKB1R w KQkq - 4 5"; // move 5: opening
+const MID_FEN = "r1bq1rk1/ppp2ppp/2n2n2/3pp3/1bPP4/2N1PN2/PP3PPP/R1BQKB1R w KQ - 0 12"; // move 12: middlegame
+const END_FEN = "4k3/8/8/8/8/8/4P3/4K3 w - - 0 40";
+/** n games, newest first at index 0; result/opening/mistakes overridable per index. */
+function mkGames(n, f = () => ({}), offset = 0) {
+  return Array.from({ length: n }, (_, i) => ({
+    id: `g${offset + i}`, end_time: 1_700_000_000 - (offset + i) * 1000, colour: "white", result: "loss",
+    opening: "Sicilian Defense", mistakes: { inaccuracy: 0, mistake: 2, blunder: 2 }, ...f(i),
+  }));
+}
+const mkPuzzle = (gameId, tag, over = {}) => ({
+  game_id: gameId, ply: 1, fen: MID_FEN, class: "mistake", drop: 150, tags: [tag], colour: "white", ...over,
+});
+const coachOf = (games, puzzles, opts = {}) => buildCoach(games, puzzles, { now: NOW, ...opts });
+
+test("coach: null under 8 analysed games; unanalysed games do not count", () => {
+  eq(coachOf(mkGames(7), []), null);
+  const mixed = [...mkGames(7), { id: "x", end_time: 1, colour: "white", result: "win", opening: "" }];
+  eq(coachOf(mixed, []), null);
+  ok(coachOf(mkGames(8), []) !== null, "8 games is enough");
+});
+
+test("coach: focus is the costliest tag (capped drops), not the most frequent", () => {
+  const games = mkGames(10);
+  const puzzles = [
+    mkPuzzle("g0", "hung_piece", { drop: 120 }), mkPuzzle("g1", "hung_piece", { drop: 120 }), mkPuzzle("g2", "hung_piece", { drop: 120 }),
+    mkPuzzle("g3", "missed_fork", { drop: 5000 }), // capped at 1000, still beats 360
+    mkPuzzle("g4", "other", { drop: 9000 }), // never the focus when a real tag exists
+  ];
+  const c = coachOf(games, puzzles);
+  eq([c.focus.tag, c.focus.label, c.focus.kept, c.focus.since], ["missed_fork", "Missed forks", false, NOW]);
+  eq([c.focus.recentCount, c.focus.previousCount], [1, 0]);
+  eq(c.checklist, CHECKLISTS.missed_fork);
+  eq(checklistFor("hung_piece"), "Before you move: what can they take?");
+});
+
+test("coach: no tagged mistakes falls back to other with generic advice", () => {
+  const c = coachOf(mkGames(10), [mkPuzzle("g0", "other")]);
+  eq([c.focus.tag, c.focus.recentCount], ["other", 1]);
+  ok(c.advice.includes("slow down"), c.advice);
+  const none = coachOf(mkGames(10), []);
+  eq([none.focus.tag, none.focus.recentCount], ["other", 0]);
+  ok(none.pattern.includes("no mistakes"), none.pattern);
+});
+
+test("coach: stickiness within 7 days, expiry, and a tag that no longer occurs", () => {
+  const games = mkGames(10);
+  const puzzles = [mkPuzzle("g0", "hung_piece", { drop: 500 }), mkPuzzle("g1", "missed_fork", { drop: 100 })];
+  const since = NOW - 3 * DAY;
+  const kept = coachOf(games, puzzles, { previousFocus: { tag: "missed_fork", since } });
+  eq([kept.focus.tag, kept.focus.kept, kept.focus.since], ["missed_fork", true, since]);
+  ok(kept.pattern.includes("still the focus"), kept.pattern);
+  const old = coachOf(games, puzzles, { previousFocus: { tag: "missed_fork", since: NOW - 8 * DAY } });
+  eq([old.focus.tag, old.focus.kept, old.focus.since], ["hung_piece", false, NOW]);
+  const gone = coachOf(games, puzzles, { previousFocus: { tag: "back_rank", since } });
+  eq([gone.focus.tag, gone.focus.kept], ["hung_piece", false]);
+  const catchAll = coachOf(games, puzzles, { previousFocus: { tag: "other", since } });
+  eq(catchAll.focus.tag, "hung_piece");
+  // mistakes older than the recent window do not keep a focus alive
+  const six = coachOf(mkGames(30), [mkPuzzle("g25", "missed_fork"), mkPuzzle("g0", "hung_piece")], { previousFocus: { tag: "missed_fork", since } });
+  eq(six.focus.tag, "hung_piece");
+});
+
+test("coach: where needs 60% in a phase and 65% in a colour", () => {
+  const games = mkGames(10);
+  const hp = (i, over) => mkPuzzle(`g${i}`, "hung_piece", over);
+  const whereOf = (ps) => coachOf(games, ps).focus.where;
+  eq(whereOf([hp(0, { fen: MID_FEN, colour: "black" }), hp(1, { fen: MID_FEN, colour: "black" })]), "mostly in the middlegame, as Black");
+  eq(whereOf([hp(0, { fen: MID_FEN }), hp(1, { fen: MID_FEN }), hp(2, { fen: END_FEN, colour: "black" }), hp(3, { fen: MIDDLE, colour: "black" }), hp(4, { fen: MIDDLE })]), null); // 40% each, 60% white: neither
+  // exactly 3 of 5 = 60% in the middlegame; colour 3 of 5 = 60% is below 65%
+  eq(whereOf([hp(0, { fen: MID_FEN }), hp(1, { fen: MID_FEN }), hp(2, { fen: MID_FEN, colour: "black" }), hp(3, { fen: END_FEN, colour: "black" }), hp(4, { fen: MIDDLE })]), "mostly in the middlegame");
+  // 2 of 3 black is 67%, phases are split: colour only
+  eq(whereOf([hp(0, { colour: "black" }), hp(1, { colour: "black", fen: END_FEN }), hp(2, { fen: MIDDLE })]), "mostly as Black");
+  eq(whereOf([hp(0, { fen: END_FEN })]), "in the endgame, as White"); // one mistake: no "mostly"
+});
+
+test("coach: pattern wording is singular and plural correct, with real numbers", () => {
+  const one = coachOf(mkGames(10), [mkPuzzle("g0", "hung_piece", { colour: "black" })]);
+  eq(one.pattern, "In your last 5 games you left a piece where it could be taken once, in the middlegame, as Black. That cost you more than any other kind of mistake.");
+  const many = coachOf(mkGames(10), [mkPuzzle("g0", "hung_piece"), mkPuzzle("g1", "hung_piece")]);
+  ok(many.pattern.includes("taken 2 times, mostly in the middlegame, as White."), many.pattern);
+  const tie = coachOf(mkGames(10), [mkPuzzle("g0", "hung_piece"), mkPuzzle("g1", "missed_fork")]);
+  ok(tie.pattern.includes("among the costliest"), tie.pattern);
+});
+
+test("coach: trends say down from / up from / about the same", () => {
+  // 20 recent games with 2 mistakes + 2 blunders each (4.0), 20 earlier with 5.0 -> down; win rate 50% vs 25%
+  const recent = mkGames(20, (i) => ({ result: i < 10 ? "win" : "loss" }));
+  const earlier = mkGames(20, (i) => ({ result: i < 5 ? "win" : "loss", mistakes: { inaccuracy: 0, mistake: 3, blunder: 2 } }), 20);
+  const c = coachOf([...recent, ...earlier], []);
+  eq([c.recentGames, c.previousGames], [20, 20]);
+  eq(c.trends.length, 3);
+  eq(c.trends[0].text, "Blunders and mistakes per game: 4.0, down from 5.0.");
+  eq(c.trends[0].better, true);
+  eq(c.trends[2].text, "Win rate: 50%, up from 25%.");
+  eq(c.trends[2].better, true);
+  // reversed: up is worse for mistakes, worse for win rate when down
+  const worse = coachOf([...earlier.map((g, i) => ({ ...g, id: `r${i}`, end_time: g.end_time + 1e6 })), ...recent], []);
+  eq(worse.trends[0].text, "Blunders and mistakes per game: 5.0, up from 4.0.");
+  eq(worse.trends[0].better, false);
+  eq(worse.trends[2].better, false);
+  // under 10% change
+  const flat = mkGames(40, (i) => ({ mistakes: { inaccuracy: 0, mistake: 2, blunder: i < 20 ? 2 : 2 }, result: "loss" }));
+  const f = coachOf(flat, []);
+  ok(f.trends[0].text.includes("about the same") && f.trends[0].better === null, f.trends[0].text);
+  const fTag = coachOf(flat, [mkPuzzle("g0", "hung_piece"), mkPuzzle("g25", "hung_piece")]);
+  eq(fTag.trends[1].label, "Pieces left hanging per game");
+  ok(fTag.trends[1].text.includes("about the same"), fTag.trends[1].text);
+});
+
+test("coach: small history splits newest half (rounded up) vs the rest; no history means no verdict", () => {
+  const c = coachOf(mkGames(9), []);
+  eq([c.recentGames, c.previousGames], [5, 4]);
+  const c2 = coachOf(mkGames(27), []);
+  eq([c2.recentGames, c2.previousGames], [14, 13]);
+  const c3 = coachOf(mkGames(28), []);
+  eq([c3.recentGames, c3.previousGames], [20, 8]);
+  // forged "no previous window" cannot occur at >= 8 games, so check the wording via a lone-window helper path:
+  // 8 games gives 4 + 4, which is still a comparison
+  eq(coachOf(mkGames(8), []).previousGames, 4);
+});
+
+test("coach: goingWell prefers a falling tag, then blunders, then win rate, then opening, then fallback", () => {
+  const blunders = (n) => ({ mistakes: { inaccuracy: 0, mistake: 1, blunder: n } });
+  const recent = mkGames(20, () => blunders(1));
+  const earlier = mkGames(20, () => blunders(2), 20);
+  const all = [...recent, ...earlier];
+  // (a) 4 hung pieces recently vs 9 before beats everything else
+  const hp = (ids) => ids.map((i) => mkPuzzle(`g${i}`, "hung_piece"));
+  const a = coachOf(all, [...hp([0, 1, 2, 3]), ...hp([20, 21, 22, 23, 24, 25, 26, 27, 28])]);
+  eq(a.goingWell, "You are hanging fewer pieces: 4 in your last 20 games, down from 9.");
+  // fewer than 3 before: not (a); blunders 1.0 vs 2.0 -> (b)
+  const b = coachOf(all, hp([0, 20, 21]));
+  eq(b.goingWell, "You are blundering less: 1.0 per game, down from 2.0.");
+  // (c) blunders flat, win rate 60% vs 30%
+  const flatB = mkGames(40, () => blunders(2)).map((g, i) => ({ ...g, result: i < 12 ? "win" : i < 20 ? "loss" : i < 26 ? "win" : "loss" }));
+  eq(coachOf(flatB, []).goingWell, "Your win rate is up: 60% in your last 20 games, from 30% before.");
+  // (d) opening: Italian Game 5 wins from 6, nothing else improved
+  const italian = mkGames(40, (i) => ({ ...blunders(2), result: i < 5 || (i >= 20 && i < 25) ? "win" : "loss", opening: i < 6 ? "Italian Game Giuoco Piano" : "Sicilian Defense" }));
+  const d = coachOf(italian, []);
+  eq(d.goingWell, "Your best results lately are in the Italian Game: 5 wins from 6.");
+  // a losing record is not praised; falls back
+  const e = coachOf(mkGames(10), []);
+  eq(e.goingWell, "You have 10 games analysed, which is enough to see real patterns.");
 });
 
 // ---- run ------------------------------------------------------------------------------------

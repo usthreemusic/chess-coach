@@ -104,6 +104,8 @@
 :root[data-theme="pastel"] #info::before { content: "Coach_says.txt" !important; }
 :root[data-theme="pastel"] .weak { --tb: #f25ca2 !important; }
 :root[data-theme="pastel"] .weak::before { content: "Weak_spots.txt" !important; }
+:root[data-theme="pastel"] .weak.coach { --tb: #3ecbf0 !important; }
+:root[data-theme="pastel"] .weak.coach::before { content: "Coach.txt" !important; }
 :root[data-theme="pastel"] .chart-card::before { content: "Graph.bmp" !important; }
 :root[data-theme="pastel"] .chart-card:nth-child(3n+2) { --tb: #f25ca2 !important; }
 :root[data-theme="pastel"] .chart-card:nth-child(3n+2)::before { content: "Oops_chart.png" !important; }
@@ -116,6 +118,8 @@
 :root[data-theme="pastel"] #status:not([hidden]) { display: block; }
 :root[data-theme="pastel"] #info { min-height: 76px; }
 :root[data-theme="pastel"] .weak h2, :root[data-theme="pastel"] .chart-card h2 { font-size: 22px; font-weight: 400; }
+:root[data-theme="pastel"] .coach h3 { font-size: 20px; font-weight: 400; }
+:root[data-theme="pastel"] .coach p, :root[data-theme="pastel"] .coach .coach-trends { font-size: inherit; }
 :root[data-theme="pastel"] #result:not(:empty) { background: #fff; border: 3px solid #2a1a5e; padding: 6px 10px; box-shadow: 3px 3px 0 #2a1a5e; margin-bottom: 10px; }
 :root[data-theme="pastel"] #result p:last-child { margin-bottom: 0; }
 
@@ -144,7 +148,7 @@
 /* Board */
 :root[data-theme="pastel"] cg-board {
   background-color: #fff3c4;
-  background-image: conic-gradient(#fff3c4 25%, #ffb21a 0 50%, #fff3c4 0 75%, #ffb21a 0);
+  background-image: conic-gradient(#ffb21a 25%, #fff3c4 0 50%, #ffb21a 0 75%, #fff3c4 0);
   background-size: 25% 25%;
 }
 :root[data-theme="pastel"] .cg-wrap { --coord: #2a1a5e; }
@@ -247,6 +251,7 @@
   font-weight: 700;
 }
 :root[data-theme="win95"] .weak::before { content: "Weaknesses"; }
+:root[data-theme="win95"] .weak.coach::before { content: "Coach's note"; }
 :root[data-theme="win95"] .chart-card::before { content: "Chart"; }
 :root[data-theme="win95"] .chart-box { background: #fff; border: 2px solid; border-color: #808080 #fff #fff #808080; padding: 4px; }
 :root[data-theme="win95"] .weak h2, :root[data-theme="win95"] .chart-card h2 { font-size: 14px; }
@@ -254,7 +259,7 @@
 /* Board */
 :root[data-theme="win95"] cg-board {
   background-color: #fff;
-  background-image: conic-gradient(#fff 25%, #808080 0 50%, #fff 0 75%, #808080 0);
+  background-image: conic-gradient(#808080 25%, #fff 0 50%, #808080 0 75%, #fff 0);
   background-size: 25% 25%;
 }
 :root[data-theme="win95"] .cg-wrap { --coord: #000; }
@@ -331,6 +336,8 @@
 :root[data-theme="dos"] #info { padding: 6px 10px; }
 :root[data-theme="dos"] th { font-size: 18px; font-weight: 400; color: #ffff55; border-bottom: 2px solid #fff; }
 :root[data-theme="dos"] td { border-bottom: 0; }
+:root[data-theme="dos"] .coach h3 { color: #ffff55; font-weight: 400; font-size: 20px; text-transform: uppercase; }
+:root[data-theme="dos"] .coach p, :root[data-theme="dos"] .coach .coach-trends { font-size: inherit; }
 :root[data-theme="dos"] .weak h2, :root[data-theme="dos"] .chart-card h2, :root[data-theme="dos"] #prompt,
 :root[data-theme="dos"] .game-head h2 { color: #ffff55; font-weight: 400; font-size: 24px; text-transform: uppercase; }
 :root[data-theme="dos"] #prompt { font-size: 24px; }
@@ -350,7 +357,7 @@
 /* Board */
 :root[data-theme="dos"] cg-board {
   background-color: #aaaaaa;
-  background-image: conic-gradient(#aaaaaa 25%, #00aaaa 0 50%, #aaaaaa 0 75%, #00aaaa 0);
+  background-image: conic-gradient(#00aaaa 25%, #aaaaaa 0 50%, #00aaaa 0 75%, #aaaaaa 0);
   background-size: 25% 25%;
 }
 :root[data-theme="dos"] .cg-wrap { --coord: #000; }

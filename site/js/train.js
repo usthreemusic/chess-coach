@@ -4,6 +4,8 @@ import { ready, onRefresh } from "./app.js";
 import { loadPuzzles, loadThemed } from "./core/data.js";
 import { phaseOf } from "./core/chessutil.js";
 import { explainLine } from "./core/explain.js";
+import { checklistFor } from "./core/coach.js";
+import { createEngine } from "./core/engine.js";
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, className, text) => {
@@ -35,6 +37,10 @@ const INTERVAL_DAYS = [0, 0, 1, 3, 7, 21]; // indexed by box, 1-5
 const LEARNED_BOX = 4;
 
 const REPLY_DELAY = 600; // ms before the opponent's reply is played
+const WRONG_DELAY = 900; // ms a wrong move stays on the board, marked in red, when no reply can be shown
+const REFUTE_DEPTH = 10; // engine depth for the opponent's answer to a wrong move: quick, and enough to find the punishment
+const REFUTE_WAIT = 2500; // ms to wait for that answer before giving up on it
+const REFUTE_HOLD = 2400; // ms the opponent's answer stays on the board before the piece goes back
 const LINE_DELAY = 1100; // ms between moves when the best line is played back
 const PIECE_NAMES = { p: "pawn", n: "knight", b: "bishop", r: "rook", q: "queen", k: "king" };
 const PHASE_LABELS = { opening: "Opening (moves 1–11)", middlegame: "Middlegame", endgame: "Endgame" };
@@ -333,6 +339,7 @@ function scoreNote() {
 function finish(solved, altSan) {
   answered = true;
   playToken++; // cancel a pending opponent reply
+  clearWrong();
   score(!solved ? "down" : hinted ? "same" : "up");
   for (const id of ["show-answer", "hint"]) {
     $(id).hidden = true;
@@ -365,10 +372,77 @@ function finish(solved, altSan) {
   $("result").append(el("p", "muted", scoreNote()));
 }
 
-// A wrong move: say so, put the piece back and let the player try again.
-function wrong(san) {
+// The red cross on a wrong move's square, and the red squares under it.
+function markWrong(square) {
+  const white = board.state.orientation === "white";
+  const file = square.charCodeAt(0) - 97;
+  const rank = Number(square[1]) - 1;
+  const badge = $("wrong-badge");
+  badge.style.left = `${((white ? file : 7 - file) + 1) * 12.5}%`;
+  badge.style.top = `${(white ? 7 - rank : rank) * 12.5}%`;
+  badge.hidden = false;
+  $("board").classList.add("bad-move");
+}
+
+function clearWrong() {
+  $("wrong-badge").hidden = true;
+  $("board").classList.remove("bad-move");
+}
+
+// The opponent's best answer to a wrong move and their follow-up, as UCI moves. Empty when the
+// engine is unavailable or too slow, so the puzzle never waits on it for long.
+let engine = null;
+async function refutation(after) {
+  if (after.isGameOver()) return [];
+  try {
+    if (!engine) engine = createEngine();
+    const lines = await Promise.race([
+      engine.evaluate(after.fen(), { depth: REFUTE_DEPTH }),
+      new Promise((resolve) => setTimeout(() => resolve(null), REFUTE_WAIT)),
+    ]);
+    const pv = (lines && lines[0] && lines[0].pv) || [];
+    return [pv[0], pv[2]].filter(Boolean);
+  } catch (err) {
+    return [];
+  }
+}
+
+// A wrong move: say so, leave it on the board marked in red, show how the opponent would answer
+// (red arrows), then put the piece back and let the player try again.
+// `after` is the position with the wrong move played.
+function wrong(san, after, squares) {
   if (scores()) score("down");
-  setMovable(true);
+  if (after) {
+    setGood(false);
+    board.set({
+      fen: after.fen(),
+      turnColor: colourOf(after),
+      lastMove: squares,
+      check: after.isCheck(),
+      movable: { color: undefined, dests: new Map() },
+    });
+    markWrong(squares[1]);
+    const token = ++playToken;
+    const started = Date.now();
+    const reset = () => {
+      if (token !== playToken) return;
+      clearWrong();
+      board.setAutoShapes([]);
+      if (!answered) setMovable(true);
+    };
+    refutation(after).then((moves) => {
+      if (token !== playToken) return;
+      if (!moves.length) return setTimeout(reset, Math.max(0, WRONG_DELAY - (Date.now() - started)));
+      board.setAutoShapes(
+        moves.map((uci, i) => ({ orig: sq(uci)[0], dest: sq(uci)[1], brush: i ? "paleRed" : "red" }))
+      );
+      const reply = sanFrom(after, moves.slice(0, 1))[0];
+      if (reply) $("result").append(el("p", "", `Your opponent would answer ${reply}.`));
+      setTimeout(reset, REFUTE_HOLD);
+    });
+  } else {
+    setMovable(true);
+  }
   const text = !san
     ? "That move is not legal. Try again."
     : !isThemed() && step === 0 && san === current.played_san
@@ -400,7 +474,7 @@ function onMove(orig, dest) {
   const san = play(after, uci).san;
   const alt = alts.indexOf(uci);
   // Any checkmate is as good as the expected move.
-  if (uci !== expected && alt === -1 && !after.isCheckmate()) return wrong(san);
+  if (uci !== expected && alt === -1 && !after.isCheckmate()) return wrong(san, after, [orig, dest]);
 
   chess = after;
   step++;
@@ -490,6 +564,7 @@ function showPuzzle(puzzle) {
   hinted = false;
   outcome = null;
   playToken++;
+  clearWrong();
   chess = new Chess(puzzle.fen);
   step = 0;
   buildLines(puzzle);
@@ -522,6 +597,10 @@ function showPuzzle(puzzle) {
       `${formatDate(puzzle.end_time * 1000)} · ${puzzle.time_class} · ${puzzle.opening_family} · ${puzzle.opening || "Unknown opening"} · you are ${colour}`;
     $("review-link").href = `review.html?id=${encodeURIComponent(puzzle.game_id)}&ply=${puzzle.ply}`;
   }
+  // The pre-move question for the chosen mistake type (Heisman-style safety check)
+  const checklist = !isThemed() && filters.tag !== "all" ? checklistFor(filters.tag) : null;
+  $("checklist").textContent = checklist || "";
+  $("checklist").hidden = !checklist;
   updateCounts();
 }
 

@@ -33,6 +33,8 @@ jobs:
       - run: node tests/js/run.mjs
       - name: Assemble site
         run: cp -rL site _site
+      - name: Stamp scripts and styles with this commit, so browsers never mix old and new files
+        run: python pipeline/stamp_site.py _site "${GITHUB_SHA::8}"
       - uses: actions/upload-pages-artifact@v3
         with:
           path: _site

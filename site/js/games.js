@@ -1,5 +1,6 @@
 import { ready, onRefresh } from "./app.js";
-import { loadGames } from "./core/data.js";
+import { loadGames, loadPuzzles, currentUser } from "./core/data.js";
+import { renderCoach } from "./coach.js";
 
 const PAGE = 200;
 const $ = (id) => document.getElementById(id);
@@ -89,6 +90,13 @@ async function refresh() {
     return;
   }
   render();
+  // The note is a bonus: a failure here must not break the games list.
+  try {
+    const { puzzles } = await loadPuzzles();
+    renderCoach($("coach"), currentUser(), games, puzzles);
+  } catch (err) {
+    console.error(err);
+  }
 }
 
 async function init() {
